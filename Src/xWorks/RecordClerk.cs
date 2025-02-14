@@ -522,7 +522,8 @@ namespace SIL.FieldWorks.XWorks
 			}
 			if (m_list.Filter == filter)
 				return false;
-			m_list.Filter = filter;
+			// Use OnChangeFilter so that column headers get updated (LT-21962).
+			OnChangeFilter(new FilterChangeEventArgs(filter, m_list.Filter));
 			m_list.TransferOwnership(filter as IDisposable);
 			return true;
 		}
@@ -1186,7 +1187,7 @@ namespace SIL.FieldWorks.XWorks
 			string areaChoice = m_propertyTable.GetStringProperty("areaChoice", null);
 			if (areaChoice == "notebook")
 			{
-				if (AreCustomFieldsAProblem(new int[] { RnGenericRecTags.kClassId}))
+				if (AreCustomFieldsAProblem(new int[] { RnGenericRecTags.kClassId }))
 					return true;
 				using (var dlg = new NotebookExportDialog(m_mediator, m_propertyTable))
 				{

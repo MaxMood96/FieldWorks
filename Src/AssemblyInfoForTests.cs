@@ -1,12 +1,12 @@
-// Copyright (c) 2012-2019 SIL International
+// Copyright (c) 2012-2021 SIL International
 // This software is licensed under the LGPL, version 2.1 or later
 // (http://www.gnu.org/licenses/lgpl-2.1.html)
 
-using NUnit.Framework;
 using SIL.LCModel.Core.Attributes;
 using SIL.FieldWorks.Common.FwUtils.Attributes;
 using SIL.LCModel.Utils.Attributes;
 using SIL.TestUtilities;
+using System.Reflection;
 
 // This file is for test fixtures for UI related projects, i.e. projects that do
 // reference System.Windows.Forms et al.
@@ -34,12 +34,14 @@ using SIL.TestUtilities;
 // Handles any unhandled exceptions thrown on Windows Forms threads
 [assembly: HandleApplicationThreadException]
 
-// NOTE: it is important that OfflineSldr comes before InitializeIcu!
+// Initialize ICU
+[assembly: InitializeIcu(IcuVersion = 70)]
+
 // Turns the SLDR API into offline mode
 [assembly: OfflineSldr]
 
-// Initialize ICU
-[assembly: InitializeIcu(IcuVersion = 54)]
-
 // Allow creating COM objects from manifest file important that it comes after InitializeIcu
 [assembly: CreateComObjectsFromManifest]
+
+// This is for testing VersionInfoProvider in FwUtils
+[assembly: AssemblyInformationalVersion("9.0.6 45470 Alpha")]

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2015 SIL International
+// Copyright (c) 2015 SIL International
 // This software is licensed under the LGPL, version 2.1 or later
 // (http://www.gnu.org/licenses/lgpl-2.1.html)
 
@@ -6,10 +6,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Web.Caching;
 using Paratext.LexicalContracts;
 using SIL.LCModel.Core.WritingSystems;
 using SIL.LCModel.Core.KernelInterfaces;
 using SIL.LCModel;
+using SIL.LCModel.Core.Text;
 using SIL.LCModel.DomainServices;
 using SIL.LCModel.Infrastructure;
 
@@ -79,15 +81,19 @@ namespace SIL.FieldWorks.ParatextLexiconPlugin
 			}
 		}
 
-		public int HomographNumber
+	  /// <summary>
+	  /// We exchange the user visible homograph number with Paratext (starting at 1)
+	  /// <remarks>0 indicates uninitialized</remarks>
+	  /// </summary>
+	  public int HomographNumber
 		{
 			get
 			{
 				ILexEntry entry;
 				if (!m_lexicon.TryGetEntry(m_key, out entry))
-					return 0;
-
-				return entry.HomographNumber;
+					return Key.Homograph; // This was our best guess if this was created but not added
+				// If the entry has been added return its current homograph number from LCM (adjusted)
+				return FdoLexicon.GetParatextHomographNumFromEntry(entry);
 			}
 		}
 
@@ -232,11 +238,13 @@ namespace SIL.FieldWorks.ParatextLexiconPlugin
 						{
 							// An empty sense exists (probably was created during a call to AddLexeme)
 							sense = new LexSenseLexiconSense(m_lexicon, m_key, entry.SensesOS[0]);
+							entry.SensesOS[0].ImportResidue = TsStringUtils.MakeString(FdoLexicon.AddedByParatext, m_lexicon.Cache.DefaultAnalWs);
 						}
 						else
 						{
 							ILexSense newSense = m_lexicon.Cache.ServiceLocator.GetInstance<ILexSenseFactory>().Create(
 								entry, new SandboxGenericMSA(), (string)null);
+							newSense.ImportResidue = TsStringUtils.MakeString(FdoLexicon.AddedByParatext, m_lexicon.Cache.DefaultAnalWs);
 							sense = new LexSenseLexiconSense(m_lexicon, m_key, newSense);
 						}
 					});

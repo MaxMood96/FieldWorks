@@ -38,6 +38,8 @@ namespace SIL.FieldWorks.WordWorks.Parser
 		string m_sM3FXTAffixAlloFeatsDump;
 		string m_sM3FXTLatinDump;
 		string m_sM3FXTIrregularlyInflectedFormsDump;
+		string m_sM3FXTQuechuaMYLDump;
+		string m_sM3FXTEmiFLExDump;
 		private string m_sAbazaOrderClassPlayDump;
 		readonly Dictionary<string, XPathDocument> m_mapXmlDocs = new Dictionary<string, XPathDocument>();
 
@@ -56,7 +58,7 @@ namespace SIL.FieldWorks.WordWorks.Parser
 		protected string m_sLexTransform;
 		protected string m_sGramTransform;
 
-		[TestFixtureSetUp]
+		[OneTimeSetUp]
 		public void FixtureSetup()
 		{
 			m_sTestPath = Path.Combine(FwDirectoryFinder.SourceDirectory, "LexText", "ParserCore", "ParserCoreTests", "M3ToXAmpleTransformerTestsDataFiles");
@@ -83,6 +85,8 @@ namespace SIL.FieldWorks.WordWorks.Parser
 			m_sM3FXTLatinDump = Path.Combine(m_sTestPath, "LatinParserFxtResult.xml");
 			m_sM3FXTIrregularlyInflectedFormsDump = Path.Combine(m_sTestPath, "IrregularlyInflectedFormsParserFxtResult.xml");
 			m_sAbazaOrderClassPlayDump = Path.Combine(m_sTestPath, "Abaza-OrderclassPlay.xml");
+			m_sM3FXTQuechuaMYLDump = Path.Combine(m_sTestPath, "QuechuaMYLFxtResult.xml");
+			m_sM3FXTEmiFLExDump = Path.Combine(m_sTestPath, "emi-flexFxtResult.xml");
 
 			SetupXmlDocument(m_sM3FXTDump);
 			SetupXmlDocument(m_sM3FXTCircumfixDump);
@@ -99,6 +103,8 @@ namespace SIL.FieldWorks.WordWorks.Parser
 			SetupXmlDocument(m_sM3FXTLatinDump);
 			SetupXmlDocument(m_sM3FXTIrregularlyInflectedFormsDump);
 			SetupXmlDocument(m_sAbazaOrderClassPlayDump);
+			SetupXmlDocument(m_sM3FXTQuechuaMYLDump);
+			SetupXmlDocument(m_sM3FXTEmiFLExDump);
 		}
 
 		private void SetupXmlDocument(string filepath)
@@ -133,6 +139,7 @@ namespace SIL.FieldWorks.WordWorks.Parser
 			ApplyTransform(m_sM3FXTAffixAlloFeatsDump, m_adTransform, "AffixAlloFeatsAdCtl.txt");
 			ApplyTransform(m_sM3FXTLatinDump, m_adTransform, "LatinAdCtl.txt");
 			ApplyTransform(m_sM3FXTIrregularlyInflectedFormsDump, m_adTransform, "IrregularlyInflectedFormsAdCtl.txt");
+			ApplyTransform(m_sM3FXTQuechuaMYLDump, m_adTransform, "QuechuaMYLadctl.txt");
 		}
 		/// <summary>
 		/// Test creating the lexicon file
@@ -156,6 +163,8 @@ namespace SIL.FieldWorks.WordWorks.Parser
 			ApplyTransform(m_sM3FXTAffixAlloFeatsDump, m_lexTransform, "AffixAlloFeatsLexicon.txt");
 			ApplyTransform(m_sM3FXTIrregularlyInflectedFormsDump, m_lexTransform, "IrregularlyInflectedFormsLexicon.txt");
 			ApplyTransform(m_sAbazaOrderClassPlayDump, m_lexTransform, "Abaza-OrderclassPlaylex.txt");
+			ApplyTransform(m_sM3FXTQuechuaMYLDump, m_lexTransform, "QuechuaMYLlex.txt");
+			ApplyTransform(m_sM3FXTEmiFLExDump, m_lexTransform, "emi-flexlex.txt");
 		}
 		/// <summary>
 		/// Test creating the word grammar file
@@ -172,6 +181,7 @@ namespace SIL.FieldWorks.WordWorks.Parser
 			ApplyTransform(m_sM3FXTCliticDump, m_gramTransform, "CliticWordGrammar.txt");
 			ApplyTransform(m_sM3FXTAffixAlloFeatsDump, m_gramTransform, "AffixAlloFeatsWordGrammar.txt");
 			ApplyTransform(m_sM3FXTLatinDump, m_gramTransform, "LatinWordGrammar.txt");
+			ApplyTransform(m_sM3FXTQuechuaMYLDump, m_gramTransform, "QuechuaMYLgram.txt");
 		}
 		private void ApplyTransform(string sInput, XslCompiledTransform transform, string sExpectedOutput)
 		{

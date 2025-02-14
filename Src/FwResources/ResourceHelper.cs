@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2004-2015 SIL International
+// Copyright (c) 2004-2021 SIL International
 // This software is licensed under the LGPL, version 2.1 or later
 // (http://www.gnu.org/licenses/lgpl-2.1.html)
 
@@ -34,6 +34,8 @@ namespace SIL.FieldWorks.Resources
 		AllScriptureStandardFormat,
 		/// <summary>*.xml</summary>
 		XML,
+		/// <summary>Phonology XML (*.xml)</summary>
+		PhonologyXML,
 		/// <summary>*.rtf</summary>
 		RichTextFormat,
 		/// <summary>*.pdf</summary>
@@ -133,6 +135,7 @@ namespace SIL.FieldWorks.Resources
 			s_fileFilterExtensions[FileFilterType.DefaultStandardFormat] = "*.sf";
 			s_fileFilterExtensions[FileFilterType.AllScriptureStandardFormat] = "*.db; *.sf; *.sfm; *.txt";
 			s_fileFilterExtensions[FileFilterType.XML] = "*.xml";
+			s_fileFilterExtensions[FileFilterType.PhonologyXML] = "*.xml";
 			s_fileFilterExtensions[FileFilterType.RichTextFormat] = "*.rtf";
 			s_fileFilterExtensions[FileFilterType.PDF] = "*.pdf";
 			s_fileFilterExtensions[FileFilterType.OXES] = "*" + FwFileExtensions.ksOpenXmlForEditingScripture;
@@ -189,15 +192,25 @@ namespace SIL.FieldWorks.Resources
 		{
 			get
 			{
-				if (s_form == null)
-					s_form = new ResourceHelperImpl();
-				return s_form;
+				var sForm = SingletonsContainer.Get<ResourceHelperImpl>();
+				if (sForm == null)
+				{
+					sForm = new ResourceHelperImpl();
+					SingletonsContainer.Add(sForm);
+				}
+
+				return sForm;
 			}
 			set
 			{
-				if (s_form != null)
-					s_form.Dispose();
-				s_form = value;
+				var sForm = SingletonsContainer.Get<ResourceHelperImpl>();
+				if (sForm != null)
+				{
+					SingletonsContainer.Remove(sForm);
+					sForm.Dispose();
+				}
+				sForm = value;
+				SingletonsContainer.Add(sForm);
 			}
 		}
 

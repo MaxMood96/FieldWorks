@@ -10,19 +10,20 @@ using System.Diagnostics;
 using System.ComponentModel;
 using SIL.FieldWorks.Common.Controls;
 using SIL.FieldWorks.Common.Framework;
-using SIL.LCModel;
-using SIL.LCModel.DomainImpl;
-using SIL.LCModel.Infrastructure;
-using SIL.LCModel.Utils;
-using XCore;
-using SIL.FieldWorks.IText;
-using SIL.FieldWorks.Common.RootSites;
 using SIL.FieldWorks.Common.FwUtils;
+using SIL.FieldWorks.Common.RootSites;
+using SIL.FieldWorks.IText;
 using SIL.FieldWorks.LexText.Controls;
 using SIL.FieldWorks.LexText.Controls.DataNotebook;
+using SIL.LCModel;
 using SIL.LCModel.Core.Scripture;
+using SIL.LCModel.DomainImpl;
 using SIL.LCModel.DomainServices;
+using SIL.LCModel.Infrastructure;
+using SIL.LCModel.Utils;
+using SIL.PlatformUtilities;
 using SIL.Utils;
+using XCore;
 
 namespace SIL.FieldWorks.XWorks.LexText
 {
@@ -190,27 +191,6 @@ namespace SIL.FieldWorks.XWorks.LexText
 				return new Guid("E716C901-3171-421f-83E1-3E012DEC9489");
 			}
 		}
-
-		/// <summary>
-		/// This application processes DB sync records.
-		/// </summary>
-		public override Guid SyncGuid
-		{
-			get
-			{
-				CheckDisposed();
-				return AppGuid;
-			}
-		}
-
-		//public override string ProductName
-		//{
-		//    get
-		//    {
-		//        CheckDisposed();
-		//        return LexTextStrings.kstidApplicationName;
-		//    }
-		//}
 
 		public override string DefaultConfigurationPathname
 		{
@@ -712,7 +692,7 @@ namespace SIL.FieldWorks.XWorks.LexText
 			CheckDisposed();
 
 			string path = String.Format(FwDirectoryFinder.CodeDirectory +
-				"{0}Helps{0}WW-ConceptualIntro{0}ConceptualIntroduction.htm",
+				"{0}Helps{0}WW-ConceptualIntro{0}ConceptualIntroFLEx.pdf",
 				Path.DirectorySeparatorChar);
 
 			OpenDocument(path, (e) => {
@@ -739,6 +719,7 @@ namespace SIL.FieldWorks.XWorks.LexText
 				// to perform some behaviors (such as refresh by pressing F5) while the modal dialog is visible,
 				// which can be bad. So, we just create a dummy control and pass that in as the parent.
 				Help.ShowHelp(new Control(), HelpFile);
+				TrackingHelper.TrackHelpRequest(HelpFile, "Help (Browse)");
 			}
 			catch(Exception)
 			{
@@ -896,7 +877,7 @@ namespace SIL.FieldWorks.XWorks.LexText
 		{
 			try
 			{
-				if (MiscUtils.IsUnix && (path.EndsWith(".html") || path.EndsWith(".htm")))
+				if (Platform.IsUnix && (path.EndsWith(".html") || path.EndsWith(".htm")))
 				{
 					using (Process.Start(webBrowserProgramLinux, Enquote(path)))
 					{
@@ -908,6 +889,7 @@ namespace SIL.FieldWorks.XWorks.LexText
 					{
 					}
 				}
+				TrackingHelper.TrackHelpRequest(path, Path.GetFileName(path));
 			}
 			catch (T e)
 			{

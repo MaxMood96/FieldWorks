@@ -25,11 +25,12 @@ namespace SIL.FieldWorks.Build.Tasks.Localization
 	internal class LocalizeLists
 	{
 		private const int ExpectedListCount = 29;
-		private const string AcademicDomains = "AcademicDomains.xlf";
-		private const string MiscLists = "MiscLists.xlf";
-		private const string LexicalTypes = "LexicalTypes.xlf";
-		private const string SemanticDomains = "SemanticDomains.xlf";
-		private const string AnthropologyCategories = "AnthropologyCategories.xlf";
+
+		internal const string AcademicDomains = "AcademicDomains.xlf";
+		internal const string MiscLists = "MiscLists.xlf";
+		internal const string LexicalTypes = "LexicalTypes.xlf";
+		internal const string SemanticDomains = "SemanticDomains.xlf";
+		internal const string AnthropologyCategories = "AnthropologyCategories.xlf";
 
 		/// <remarks>
 		/// NB: for those of you wondering why these are in such a ridiculous order,
@@ -91,9 +92,10 @@ namespace SIL.FieldWorks.Build.Tasks.Localization
 		/// <param name="sourceFile">path to the XML file containing lists to localize</param>
 		/// <param name="localizationsRoot">path to save XLIFF files that are ready to upload to Crowdin</param>
 		/// <param name="targetLang">If specified, any strings in this locale will be included as 'final' translations</param>
+		/// <param name="listsToInclude">If specified, only these lists will be expected and used in the conversion</param>
 		/// <param name="logger"/>
 		public static void SplitSourceLists(string sourceFile, string localizationsRoot, string targetLang,
-			TaskLoggingHelper logger = null)
+			List<string> listsToInclude = null, TaskLoggingHelper logger = null)
 		{
 			if (!File.Exists(sourceFile))
 				throw new ArgumentException("The source file does not exist.",
@@ -104,25 +106,21 @@ namespace SIL.FieldWorks.Build.Tasks.Localization
 					nameof(localizationsRoot));
 			using (var sourceXml = new XmlTextReader(sourceFile))
 			{
-				SplitLists(sourceXml, localizationsRoot, targetLang, logger);
+				SplitLists(sourceXml, localizationsRoot, targetLang, listsToInclude, logger);
 			}
 		}
 
 		internal static void SplitLists(XmlTextReader sourceFile, string localizationsRoot, string targetLang,
-			TaskLoggingHelper logger = null)
+			List<string> listsToInclude = null, TaskLoggingHelper logger = null)
 		{
+			ValidateListsToIncludeArgument(listsToInclude);
 			var sourceDoc = XDocument.Load(sourceFile);
 			var listElements = sourceDoc.Root?.Elements("List").ToArray();
 			if (listElements == null || !listElements.Any())
 				throw new ArgumentException(
 					"Source file is not in the expected format, no Lists found under the root element.");
-			if (listElements.Length != ExpectedListCount)
-			{
-				var msg = $"Source file has an unexpected list count. {listElements.Length} instead of {ExpectedListCount}";
-				if (targetLang == null || logger == null)
-					throw new ArgumentException(msg);
-				logger.LogWarning($"{msg} for '{targetLang}'.");
-			}
+			ValidateSourceDocWithListsToInclude(listElements, listsToInclude, targetLang, logger);
+			listsToInclude = listsToInclude ?? ListToXliffMap.Select(info => info.XliffFile).ToList();
 
 			// LexEntryInflTypes have a field GlossPrepend that exists, but the original designers didn't expect anyone to use it.
 			// We don't ship anything of this type, but we do want to alert any future developers on the odd chance that we might.
@@ -141,6 +139,10 @@ namespace SIL.FieldWorks.Build.Tasks.Localization
 				if (listInfo == null)
 					throw new ArgumentException(
 						"Unknown list encountered. Update ListToXliff map?");
+
+				// only add the content for the lists that were requested
+				if (!listsToInclude.Contains(listInfo.XliffFile))
+					continue;
 
 				switch (listInfo.XliffFile)
 				{
@@ -170,20 +172,75 @@ namespace SIL.FieldWorks.Build.Tasks.Localization
 						anthropologyCatList.Root.Add(new XElement(list));
 						break;
 					}
-						// ReSharper restore PossibleNullReferenceException
+					// ReSharper restore PossibleNullReferenceException
 				}
 			}
 
-			var academicDomainsXliff = ConvertListToXliff(AcademicDomains, academicDomainsList, targetLang);
-			academicDomainsXliff.Save(Path.Combine(localizationsRoot, AcademicDomains));
-			var miscListsXliff = ConvertListToXliff(MiscLists, miscLists, targetLang);
-			miscListsXliff.Save(Path.Combine(localizationsRoot, MiscLists));
-			var lexicalTypesXliff = ConvertListToXliff(LexicalTypes, lexicalTypesLists, targetLang);
-			lexicalTypesXliff.Save(Path.Combine(localizationsRoot, LexicalTypes));
-			var semanticDomainsXliff = ConvertListToXliff(SemanticDomains, semanticDomainsList, targetLang);
-			semanticDomainsXliff.Save(Path.Combine(localizationsRoot, SemanticDomains));
-			var anthroCatXliff = ConvertListToXliff(AnthropologyCategories, anthropologyCatList, targetLang);
-			anthroCatXliff.Save(Path.Combine(localizationsRoot, AnthropologyCategories));
+			if (listsToInclude.Contains(AcademicDomains))
+			{
+				var academicDomainsXliff = ConvertListToXliff(AcademicDomains, academicDomainsList, targetLang);
+				academicDomainsXliff.Save(Path.Combine(localizationsRoot, AcademicDomains));
+			}
+			if (listsToInclude.Contains(MiscLists))
+			{
+				var miscListsXliff = ConvertListToXliff(MiscLists, miscLists, targetLang);
+				miscListsXliff.Save(Path.Combine(localizationsRoot, MiscLists));
+			}
+			if (listsToInclude.Contains(LexicalTypes))
+			{
+				var lexicalTypesXliff = ConvertListToXliff(LexicalTypes, lexicalTypesLists, targetLang);
+				lexicalTypesXliff.Save(Path.Combine(localizationsRoot, LexicalTypes));
+			}
+			if (listsToInclude.Contains(SemanticDomains))
+			{
+				var semanticDomainsXliff = ConvertListToXliff(SemanticDomains, semanticDomainsList, targetLang);
+				semanticDomainsXliff.Save(Path.Combine(localizationsRoot, SemanticDomains));
+			}
+			if (listsToInclude.Contains(AnthropologyCategories))
+			{
+				var anthroCatXliff = ConvertListToXliff(AnthropologyCategories, anthropologyCatList, targetLang);
+				anthroCatXliff.Save(Path.Combine(localizationsRoot, AnthropologyCategories));
+			}
+		}
+
+		private static void ValidateSourceDocWithListsToInclude(XElement[] listElements, IEnumerable<string> listsToInclude, string targetLang, TaskLoggingHelper logger)
+		{
+			if (listsToInclude == null && listElements.Length != ExpectedListCount)
+			{
+				var msg = $"Source file has an unexpected list count. {listElements.Length} instead of {ExpectedListCount}";
+				if (targetLang == null || logger == null)
+					throw new ArgumentException(msg);
+				logger.LogWarning($"{msg} for '{targetLang}'.");
+			}
+			else if(listsToInclude != null)
+			{
+				var missingLists = listsToInclude.ToList();
+				foreach (var listElement in listElements)
+				{
+					var listInfo = FindListInfoForList(listElement);
+					missingLists.Remove(listInfo?.XliffFile);
+				}
+
+				if (missingLists.Any())
+				{
+					throw new ArgumentException($"Source file does not have content for all lists to include. " +
+												$"{string.Join(",", missingLists)} content was not found.");
+				}
+			}
+		}
+
+		private static void ValidateListsToIncludeArgument(IEnumerable<string> listsToInclude)
+		{
+			if (listsToInclude == null)
+				return;
+			foreach (var list in listsToInclude)
+			{
+				if (list != LocalizeLists.AcademicDomains && list != LocalizeLists.MiscLists &&
+					list != LocalizeLists.SemanticDomains && list != LocalizeLists.LexicalTypes &&
+					list != LocalizeLists.AnthropologyCategories)
+					throw new ArgumentException(
+						$"ListsToInclude is expecting one or more .xlf file names. e.g. {LocalizeLists.SemanticDomains}");
+			}
 		}
 
 		private static ListInfo FindListInfoForList(XElement list)
@@ -224,7 +281,7 @@ namespace SIL.FieldWorks.Build.Tasks.Localization
 			throw new ArgumentException("Unknown list found");
 		}
 
-		private static void ConvertAUniToXliff(XElement list, XElement group, string baseId, ConversionMap item, string targetLang)
+		private static void ConvertAUniToXliff(XElement list, XElement group, string baseId, ConversionMap item, string targetLang, ConversionMap? context = null)
 		{
 			var sourceElem = list.Element(item.ElementName);
 			var source = sourceElem?.Elements("AUni").First().Value;
@@ -233,6 +290,18 @@ namespace SIL.FieldWorks.Build.Tasks.Localization
 				return;
 			}
 			var transUnit = XElement.Parse(string.Format(XliffUtils.TransUnitTemplate, baseId + item.IdSuffix, SecurityElement.Escape(source)));
+
+			if (context != null)
+			{
+				var descElem = list.Element(((ConversionMap)context).ElementName);
+				var description = AStrValue(descElem?.Element("AStr"));
+
+				if (!string.IsNullOrWhiteSpace(description))
+				{
+					transUnit.Add(XElement.Parse(string.Format(XliffUtils.ContextTemplate, SecurityElement.Escape(description))));
+				}
+			}
+
 			if (targetLang != null)
 			{
 				var target = sourceElem.XPathSelectElement($"AUni[@ws='{targetLang}']")?.Value;
@@ -369,7 +438,14 @@ namespace SIL.FieldWorks.Build.Tasks.Localization
 
 				}
 				ConvertAttributeAsElement(GuidMap, possibility, possGroup);
-				ConvertAUniToXliff(possibility, possGroup, possId, NameMap, targetLang);
+
+				ConversionMap? context = null;
+				if (possibilityType == "CmSemanticDomain")
+				{
+					context = DescMap;
+				}
+
+				ConvertAUniToXliff(possibility, possGroup, possId, NameMap, targetLang, context);
 				ConvertAUniToXliff(possibility, possGroup, possId, AbbrMap, targetLang);
 				ConvertAUniToXliff(possibility, possGroup, possId, RevNameMap, targetLang);
 				ConvertAUniToXliff(possibility, possGroup, possId, RevAbbrMap, targetLang);

@@ -2,14 +2,7 @@
 // This software is licensed under the LGPL, version 2.1 or later
 // (http://www.gnu.org/licenses/lgpl-2.1.html)
 
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Web.UI.WebControls;
-using System.Xml;
+using ExCSS;
 using Icu.Collation;
 using SIL.FieldWorks.Common.Controls;
 using SIL.FieldWorks.Common.FwUtils;
@@ -18,6 +11,15 @@ using SIL.LCModel.Core.Text;
 using SIL.LCModel.Core.WritingSystems;
 using SIL.LCModel.DomainServices;
 using SIL.LCModel.Utils;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Web.UI.WebControls;
+using System.Xml;
 using XCore;
 
 namespace SIL.FieldWorks.XWorks
@@ -84,7 +86,6 @@ namespace SIL.FieldWorks.XWorks
 		{
 			var entryCount = entryHvos.Length;
 			var cssPath = Path.ChangeExtension(xhtmlPath, "css");
-			var configDir = Path.GetDirectoryName(configuration.FilePath);
 			var clerk = propertyTable.GetValue<RecordClerk>("ActiveClerk", null);
 			var cache = propertyTable.GetValue<LcmCache>("cache", null);
 			// Don't display letter headers if we're showing a preview in the Edit tool or we're not sorting by headword
@@ -93,9 +94,10 @@ namespace SIL.FieldWorks.XWorks
 			using (var cssWriter = new StreamWriter(cssPath, false, Encoding.UTF8))
 			{
 				var readOnlyPropertyTable = new ReadOnlyPropertyTable(propertyTable);
-				var custCssPath = CssGenerator.CopyCustomCssAndGetPath(Path.GetDirectoryName(xhtmlPath), configDir);
+				var custCssPath = CssGenerator.CopyCustomCssAndGetPath(Path.GetDirectoryName(xhtmlPath), cache, false);
 				var settings = new ConfiguredLcmGenerator.GeneratorSettings(cache, readOnlyPropertyTable, true, true, Path.GetDirectoryName(xhtmlPath),
 					ConfiguredLcmGenerator.IsEntryStyleRtl(readOnlyPropertyTable, configuration), Path.GetFileName(cssPath) == "configured.css");
+				settings.StylesGenerator.AddGlobalStyles(configuration, readOnlyPropertyTable);
 				GenerateOpeningHtml(cssPath, custCssPath, settings, xhtmlWriter);
 				Tuple<int, int> currentPageBounds = GetPageForCurrentEntry(settings, entryHvos, entriesPerPage);
 				GenerateTopOfPageButtonsIfNeeded(settings, entryHvos, entriesPerPage, currentPageBounds, xhtmlWriter, cssWriter);
@@ -113,7 +115,7 @@ namespace SIL.FieldWorks.XWorks
 
 					var generateEntryAction = new Action(() =>
 					{
-						var entryContent = ConfiguredLcmGenerator.GenerateXHTMLForEntry(entry, configuration, publicationDecorator, settings);
+						var entryContent = ConfiguredLcmGenerator.GenerateContentForEntry(entry, configuration, publicationDecorator, settings);
 						entryStringBuilder.Append(entryContent);
 						if (progress != null)
 							progress.Position++;
@@ -134,8 +136,8 @@ namespace SIL.FieldWorks.XWorks
 
 				foreach (var entryAndXhtml in entryContents)
 				{
-					if (wantLetterHeaders && !String.IsNullOrEmpty(entryAndXhtml.Item2.ToString()))
-						GenerateLetterHeaderIfNeeded(entryAndXhtml.Item1, ref lastHeader, xhtmlWriter, col, settings);
+					if (wantLetterHeaders && !string.IsNullOrEmpty(entryAndXhtml.Item2.ToString()))
+						GenerateLetterHeaderIfNeeded(entryAndXhtml.Item1, ref lastHeader, xhtmlWriter, col, settings, clerk);
 					xhtmlWriter.WriteRaw(entryAndXhtml.Item2.ToString());
 				}
 				col?.Dispose();
@@ -150,7 +152,7 @@ namespace SIL.FieldWorks.XWorks
 					cssWriter.Write(CssGenerator.GenerateCssForSelectedEntry(settings.RightToLeft));
 					ConfiguredLcmGenerator.CopyFileSafely(settings, Path.Combine(FwDirectoryFinder.FlexFolder, ImagesFolder, CurrentEntryMarker), CurrentEntryMarker);
 				}
-				cssWriter.Write(CssGenerator.GenerateCssFromConfiguration(configuration, readOnlyPropertyTable));
+				cssWriter.Write(((CssGenerator)settings.StylesGenerator).GetStylesString());
 				cssWriter.Flush();
 			}
 		}
@@ -160,41 +162,29 @@ namespace SIL.FieldWorks.XWorks
 			return !settings.ExportPath.StartsWith(Path.Combine(Path.GetTempPath(), "DictionaryPreview"));
 		}
 
-		internal static void GenerateLetterHeaderIfNeeded(ICmObject entry, ref string lastHeader, XmlWriter xhtmlWriter, Collator headwordWsCollator, ConfiguredLcmGenerator.GeneratorSettings settings)
+		internal static void GenerateLetterHeaderIfNeeded(ICmObject entry, ref string lastHeader, XmlWriter xhtmlWriter, Collator headwordWsCollator, ConfiguredLcmGenerator.GeneratorSettings settings, RecordClerk clerk = null)
 		{
-			// If performance is an issue these dummy's can be stored between calls
-			var dummyOne = new Dictionary<string, ISet<string>>();
-			var dummyTwo = new Dictionary<string, Dictionary<string, string>>();
-			var dummyThree = new Dictionary<string, ISet<string>>();
+			StringBuilder headerTextBuilder = ConfiguredLcmGenerator.GenerateLetterHeaderIfNeeded(entry, ref lastHeader,
+				headwordWsCollator, settings, clerk);
+
 			var cache = settings.Cache;
-			var wsString = ConfiguredLcmGenerator.GetWsForEntryType(entry, settings.Cache);
-			var firstLetter = ConfiguredExport.GetLeadChar(ConfiguredLcmGenerator.GetHeadwordForLetterHead(entry), wsString, dummyOne, dummyTwo, dummyThree,
-				headwordWsCollator, cache);
-			if (firstLetter != lastHeader && !string.IsNullOrEmpty(firstLetter))
+			var wsString = ConfiguredLcmGenerator.GetWsForEntryType(entry, cache);
+
+			if (headerTextBuilder.Length > 0)
 			{
-				var headerTextBuilder = new StringBuilder();
-				var upperCase = Icu.UnicodeString.ToTitle(firstLetter, wsString);
-				var lowerCase = firstLetter.Normalize();
-				headerTextBuilder.Append(upperCase);
-				if (lowerCase != upperCase)
-				{
-					headerTextBuilder.Append(' ');
-					headerTextBuilder.Append(lowerCase);
-				}
 				xhtmlWriter.WriteStartElement("div");
 				xhtmlWriter.WriteAttributeString("class", "letHead");
 				xhtmlWriter.WriteStartElement("span");
 				xhtmlWriter.WriteAttributeString("class", "letter");
 				xhtmlWriter.WriteAttributeString("lang", wsString);
-				var wsRightToLeft = cache.WritingSystemFactory.get_Engine(wsString).RightToLeftScript;
+				var wsRightToLeft =
+					cache.WritingSystemFactory.get_Engine(wsString).RightToLeftScript;
 				if (wsRightToLeft != settings.RightToLeft)
 					xhtmlWriter.WriteAttributeString("dir", wsRightToLeft ? "rtl" : "ltr");
 				xhtmlWriter.WriteString(TsStringUtils.Compose(headerTextBuilder.ToString()));
 				xhtmlWriter.WriteEndElement();
 				xhtmlWriter.WriteEndElement();
 				xhtmlWriter.WriteWhitespace(Environment.NewLine);
-
-				lastHeader = firstLetter;
 			}
 		}
 
@@ -226,12 +216,13 @@ namespace SIL.FieldWorks.XWorks
 				var readOnlyPropTable = new ReadOnlyPropertyTable(propertyTable);
 				var exportSettings = new ConfiguredLcmGenerator.GeneratorSettings(readOnlyPropTable.GetValue<LcmCache>("cache"), readOnlyPropTable, false, false, null,
 					ConfiguredLcmGenerator.IsEntryStyleRtl(readOnlyPropTable, configuration));
+				exportSettings.StylesGenerator.AddGlobalStyles(configuration, new ReadOnlyPropertyTable(propertyTable));
 				GenerateOpeningHtml(previewCssPath, custCssPath, exportSettings, writer);
-				var content = ConfiguredLcmGenerator.GenerateXHTMLForEntry(entry, configuration, pubDecorator, exportSettings);
-				writer.WriteRaw(content);
+				var content = ConfiguredLcmGenerator.GenerateContentForEntry(entry, configuration, pubDecorator, exportSettings);
+				writer.WriteRaw(content.ToString());
 				GenerateClosingHtml(writer);
 				writer.Flush();
-				cssWriter.Write(CssGenerator.GenerateCssFromConfiguration(configuration, readOnlyPropTable));
+				cssWriter.Write(((CssGenerator)exportSettings.StylesGenerator).GetStylesString());
 				cssWriter.Flush();
 			}
 
@@ -348,20 +339,20 @@ namespace SIL.FieldWorks.XWorks
 			GeneratePageButtons(settings, entryHvos, pageRanges, currentPageBounds, xhtmlWriter);
 		}
 
-		public static List<string> GenerateNextFewEntries(DictionaryPublicationDecorator publicationDecorator, int[] entryHvos,
+		public static List<IFragment> GenerateNextFewEntries(DictionaryPublicationDecorator publicationDecorator, int[] entryHvos,
 			string currentConfigPath, ConfiguredLcmGenerator.GeneratorSettings settings, Tuple<int, int> oldCurrentPageRange, Tuple<int, int> oldAdjacentPageRange,
 			int entriesToAddCount, out Tuple<int, int> currentPage, out Tuple<int, int> adjacentPage)
 		{
 			GenerateAdjustedPageButtons(entryHvos, settings, oldCurrentPageRange, oldAdjacentPageRange,
 				entriesToAddCount, out currentPage, out adjacentPage);
-			var entries = new List<string>();
+			var entries = new List<IFragment>();
 			DictionaryConfigurationModel currentConfig = new DictionaryConfigurationModel(currentConfigPath, settings.Cache);
 			if (oldCurrentPageRange.Item1 > oldAdjacentPageRange.Item1)
 			{
 				var firstEntry = Math.Max(0, oldCurrentPageRange.Item1 - entriesToAddCount);
 				for (var i = firstEntry; i < oldCurrentPageRange.Item1; ++i)
 				{
-					entries.Add(ConfiguredLcmGenerator.GenerateXHTMLForEntry(settings.Cache.ServiceLocator.ObjectRepository.GetObject(entryHvos[i]),
+					entries.Add(ConfiguredLcmGenerator.GenerateContentForEntry(settings.Cache.ServiceLocator.ObjectRepository.GetObject(entryHvos[i]),
 						currentConfig, publicationDecorator, settings));
 				}
 			}
@@ -370,7 +361,7 @@ namespace SIL.FieldWorks.XWorks
 				var lastEntry = Math.Min(oldAdjacentPageRange.Item2, oldCurrentPageRange.Item2 + entriesToAddCount);
 				for (var i = oldCurrentPageRange.Item2 + 1; i <= lastEntry; ++i)
 				{
-					entries.Add(ConfiguredLcmGenerator.GenerateXHTMLForEntry(settings.Cache.ServiceLocator.ObjectRepository.GetObject(entryHvos[i]),
+					entries.Add(ConfiguredLcmGenerator.GenerateContentForEntry(settings.Cache.ServiceLocator.ObjectRepository.GetObject(entryHvos[i]),
 						currentConfig, publicationDecorator, settings));
 				}
 			}
@@ -458,10 +449,11 @@ namespace SIL.FieldWorks.XWorks
 
 		private static string GeneratePageButtonText(int firstEntryId, int lastEntryId, ConfiguredLcmGenerator.GeneratorSettings settings, bool isFirst)
 		{
+			var clerk = settings.PropertyTable.GetValue<RecordClerk>("ActiveClerk", null);
 			var firstEntry = settings.Cache.ServiceLocator.GetObject(firstEntryId);
 			var lastEntry = settings.Cache.ServiceLocator.GetObject(lastEntryId);
-			var firstLetters = GetIndexLettersOfHeadword(ConfiguredLcmGenerator.GetHeadwordForLetterHead(firstEntry), isFirst);
-			var lastLetters = GetIndexLettersOfHeadword(ConfiguredLcmGenerator.GetHeadwordForLetterHead(lastEntry));
+			var firstLetters = GetIndexLettersOfSortWord(ConfiguredLcmGenerator.GetSortWordForLetterHead(firstEntry, clerk), isFirst);
+			var lastLetters = GetIndexLettersOfSortWord(ConfiguredLcmGenerator.GetSortWordForLetterHead(lastEntry, clerk));
 			return firstEntryId == lastEntryId ? firstLetters : firstLetters + " .. " + lastLetters;
 		}
 
@@ -492,19 +484,19 @@ namespace SIL.FieldWorks.XWorks
 		}
 
 		/// <summary>
-		/// Return the first two letters of headword (or just one letter if headword is one character long, or if justFirstLetter is true
+		/// Return the first two letters of sort word (or just one letter if sort word is one character long, or if justFirstLetter is true
 		/// </summary>
-		private static string GetIndexLettersOfHeadword(string headWord, bool justFirstLetter = false)
+		private static string GetIndexLettersOfSortWord(string sortWord, bool justFirstLetter = false)
 		{
 			// I don't know if we can have an empty headword. If we can then return empty string instead of crashing.
-			if (headWord.Length == 0)
+			if (sortWord.Length == 0)
 				return String.Empty;
-			var length = ConfiguredExport.GetLetterLengthAt(headWord, 0);
-			if (headWord.Length > length && !justFirstLetter)
+			var length = ConfiguredExport.GetLetterLengthAt(sortWord, 0);
+			if (sortWord.Length > length && !justFirstLetter)
 			{
-				length += ConfiguredExport.GetLetterLengthAt(headWord, length);
+				length += ConfiguredExport.GetLetterLengthAt(sortWord, length);
 			}
-			return TsStringUtils.Compose(headWord.Substring(0, length));
+			return TsStringUtils.Compose(sortWord.Substring(0, length));
 		}
 
 		private static List<Tuple<int, int>> GetPageRanges(int[] entryHvos, int entriesPerPage)
@@ -548,32 +540,40 @@ namespace SIL.FieldWorks.XWorks
 			return pageRanges;
 		}
 
-		public string GenerateWsPrefixWithString(ConfiguredLcmGenerator.GeneratorSettings settings, bool displayAbbreviation, int wsId, string content)
+		public IFragment GenerateWsPrefixWithString(ConfigurableDictionaryNode config, ConfiguredLcmGenerator.GeneratorSettings settings, bool displayAbbreviation, int wsId, IFragment content)
 		{
 			var bldr = new StringBuilder();
+			var fragment = new StringFragment(bldr);
 			using (var xw = XmlWriter.Create(bldr, new XmlWriterSettings { ConformanceLevel = ConformanceLevel.Fragment }))
 			{
 				if (displayAbbreviation)
 				{
 					xw.WriteStartElement("span");
 					xw.WriteAttributeString("class", CssGenerator.WritingSystemPrefix);
+					if (!settings.IsWebExport)
+					{
+						xw.WriteAttributeString("nodeId", $"{config.GetHashCode()}");
+					}
 					var prefix = ((CoreWritingSystemDefinition)settings.Cache.WritingSystemFactory.get_EngineOrNull(wsId)).Abbreviation;
 					xw.WriteString(prefix);
 					xw.WriteEndElement();
 				}
-				xw.WriteRaw(content);
+				xw.WriteRaw(content.ToString());
 				xw.Flush();
-				return bldr.ToString();
+				return fragment;
 			}
 		}
 
-		public string GenerateAudioLinkContent(string classname, string srcAttribute, string caption, string safeAudioId)
+		public IFragment GenerateAudioLinkContent(ConfigurableDictionaryNode config, string classname,
+			string srcAttribute, string caption, string safeAudioId)
 		{
 			var bldr = new StringBuilder();
+			var fragment = new StringFragment(bldr);
 			using (var xw = XmlWriter.Create(bldr, new XmlWriterSettings { ConformanceLevel = ConformanceLevel.Fragment }))
 			{
 				xw.WriteStartElement("audio");
 				xw.WriteAttributeString("id", safeAudioId);
+				xw.WriteAttributeString("nodeId", $"{config.GetHashCode()}");
 				xw.WriteStartElement("source");
 				xw.WriteAttributeString("src", srcAttribute);
 				xw.WriteRaw("");
@@ -589,82 +589,101 @@ namespace SIL.FieldWorks.XWorks
 					xw.WriteRaw("");
 				xw.WriteFullEndElement();
 				xw.Flush();
-				return bldr.ToString();
+				return fragment;
 			}
 		}
 
-		public string WriteProcessedObject(bool isBlock, string elementContent, string className)
+		public IFragment WriteProcessedObject(ConfigurableDictionaryNode config, bool isBlock, IFragment elementContent, string className)
 		{
-			return WriteProcessedContents(isBlock, elementContent, className);
+			return WriteProcessedContents(config, isBlock, elementContent, className);
 		}
 
-		public string WriteProcessedCollection(bool isBlock, string elementContent, string className)
+		public IFragment WriteProcessedCollection(ConfigurableDictionaryNode config, bool isBlock, IFragment elementContent, string className)
 		{
-			return WriteProcessedContents(isBlock, elementContent, className);
+			return WriteProcessedContents(config, isBlock, elementContent, className);
 		}
 
-		private string WriteProcessedContents(bool asBlock, string xmlContent, string className)
+		private IFragment WriteProcessedContents(ConfigurableDictionaryNode config, bool asBlock, IFragment xmlContent, string className)
 		{
-			if (!String.IsNullOrEmpty(xmlContent))
+			if (!xmlContent.IsNullOrEmpty())
 			{
 				var bldr = new StringBuilder();
+				var fragment = new StringFragment(bldr);
 				using (var xw = XmlWriter.Create(bldr, new XmlWriterSettings { ConformanceLevel = ConformanceLevel.Fragment }))
 				{
 					xw.WriteStartElement(asBlock ? "div" : "span");
 					if (!String.IsNullOrEmpty(className))
 						xw.WriteAttributeString("class", className);
-					xw.WriteRaw(xmlContent);
+					xw.WriteRaw(xmlContent.ToString());
 					xw.WriteEndElement();
 					xw.Flush();
-					return bldr.ToString();
+					return fragment;
 				}
 			}
-			return String.Empty;
+			return new StringFragment();
 		}
 
-		public string GenerateGramInfoBeforeSensesContent(string content)
+		public IFragment GenerateGramInfoBeforeSensesContent(IFragment content, ConfigurableDictionaryNode config)
 		{
 			var bldr = new StringBuilder();
+			var fragment = new StringFragment(bldr);
 			using (var xw = XmlWriter.Create(bldr, new XmlWriterSettings { ConformanceLevel = ConformanceLevel.Fragment }))
 			{
 				xw.WriteStartElement("span");
 				xw.WriteAttributeString("class", "sharedgrammaticalinfo");
-				xw.WriteRaw(content);
+				xw.WriteRaw(content.ToString());
 				xw.WriteEndElement();
 				xw.Flush();
-				return bldr.ToString();
+				return fragment;
 			}
 		}
 
-		public string GenerateGroupingNode(object field, ConfigurableDictionaryNode config,
+		public IFragment GenerateGroupingNode(ConfigurableDictionaryNode config, object field, string className,
 			DictionaryPublicationDecorator publicationDecorator, ConfiguredLcmGenerator.GeneratorSettings settings,
-			Func<object, ConfigurableDictionaryNode, DictionaryPublicationDecorator, ConfiguredLcmGenerator.GeneratorSettings, string> childContentGenrator)
+			Func<object, ConfigurableDictionaryNode, DictionaryPublicationDecorator, ConfiguredLcmGenerator.GeneratorSettings, IFragment> childContentGenerator)
 		{
 			var bldr = new StringBuilder();
+			var fragment = new StringFragment(bldr);
+
 			using (var xw = XmlWriter.Create(bldr, new XmlWriterSettings { ConformanceLevel = ConformanceLevel.Fragment }))
 			{
 				xw.WriteStartElement("span");
-				xw.WriteAttributeString("class", CssGenerator.GetClassAttributeForConfig(config));
+				xw.WriteAttributeString("class", className);
+				if (!settings.IsWebExport)
+				{
+					xw.WriteAttributeString("nodeId", $"{config.GetHashCode()}");
+				}
 
 				var innerBuilder = new StringBuilder();
 				foreach (var child in config.ReferencedOrDirectChildren)
 				{
-					var childContent = childContentGenrator(field, child, publicationDecorator, settings);
+					var childContent = childContentGenerator(field, child, publicationDecorator, settings);
 					innerBuilder.Append(childContent);
 				}
 				var innerContents = innerBuilder.ToString();
 				if (String.IsNullOrEmpty(innerContents))
-					return String.Empty;
+					new StringFragment();
 				xw.WriteRaw(innerContents);
 				xw.WriteEndElement(); // </span>
 				xw.Flush();
 			}
-			return bldr.ToString();
+			return fragment;
 		}
 
-		public IFragmentWriter CreateWriter(StringBuilder bldr)
+		public IFragment CreateFragment()
 		{
-			return new XmlFragmentWriter(XmlWriter.Create(bldr, new XmlWriterSettings { ConformanceLevel = ConformanceLevel.Fragment }));
+			return new StringFragment();
+		}
+
+		public IFragment CreateFragment(string str)
+		{
+			return new StringFragment(str);
+		}
+
+		public IFragmentWriter CreateWriter(IFragment bldr)
+		{
+			var strbldr = (StringFragment)bldr;
+			return new XmlFragmentWriter(XmlWriter.Create(strbldr.StrBuilder, new XmlWriterSettings { ConformanceLevel = ConformanceLevel.Fragment }));
 		}
 
 		public class XmlFragmentWriter : IFragmentWriter
@@ -686,10 +705,11 @@ namespace SIL.FieldWorks.XWorks
 			}
 		}
 
-		public void StartMultiRunString(IFragmentWriter writer, string writingSystem)
+		public void StartMultiRunString(IFragmentWriter writer, ConfigurableDictionaryNode config, string writingSystem)
 		{
 			var xw = ((XmlFragmentWriter)writer).Writer;
 			xw.WriteStartElement("span");
+			xw.WriteAttributeString("nodeId", $"{config.GetHashCode()}");
 			xw.WriteAttributeString("lang", writingSystem);
 		}
 
@@ -699,10 +719,11 @@ namespace SIL.FieldWorks.XWorks
 			((XmlFragmentWriter)writer).Writer.WriteEndElement(); // </span> (lang)
 		}
 
-		public void StartBiDiWrapper(IFragmentWriter writer, bool rightToLeft)
+		public void StartBiDiWrapper(IFragmentWriter writer, ConfigurableDictionaryNode config, bool rightToLeft)
 		{
 			var xw = ((XmlFragmentWriter)writer).Writer;
 			xw.WriteStartElement("span"); // set direction on a nested span to preserve Context's position and direction.
+			xw.WriteAttributeString("nodeId", $"{config.GetHashCode()}");
 			xw.WriteAttributeString("dir", rightToLeft ? "rtl" : "ltr");
 		}
 
@@ -712,10 +733,15 @@ namespace SIL.FieldWorks.XWorks
 			((XmlFragmentWriter)writer).Writer.WriteEndElement(); // </span> (dir)
 		}
 
-		public void StartRun(IFragmentWriter writer, string writingSystem)
+		public void StartRun(IFragmentWriter writer, ConfigurableDictionaryNode config, ReadOnlyPropertyTable propTable, string writingSystem, bool first)
 		{
 			var xw = ((XmlFragmentWriter)writer).Writer;
 			xw.WriteStartElement("span");
+			// When generating an error node config is null
+			if (config != null)
+			{
+				xw.WriteAttributeString("nodeId", $"{config.GetHashCode()}");
+			}
 			xw.WriteAttributeString("lang", writingSystem);
 		}
 
@@ -725,19 +751,47 @@ namespace SIL.FieldWorks.XWorks
 			((XmlFragmentWriter)writer).Writer.WriteEndElement(); // span
 		}
 
-		public void SetRunStyle(IFragmentWriter writer, string css)
+		public void SetRunStyle(IFragmentWriter writer, ConfigurableDictionaryNode config, ReadOnlyPropertyTable propertyTable, string writingSystem, string runStyle, bool error)
 		{
-			((XmlFragmentWriter)writer).Writer.WriteAttributeString("style", css);
+			StyleDeclaration cssStyle = null;
+
+			// This is primarily intended to make formatting errors stand out in the GUI.
+			// Make the error red and slightly larger than the surrounding text.
+			if (error)
+			{
+				cssStyle = new StyleDeclaration
+				{
+					new ExCSS.Property("color") { Term = new HtmlColor(222, 0, 0) },
+					new ExCSS.Property("font-size") { Term = new PrimitiveTerm(ExCSS.UnitType.Ems, 1.5f) }
+				};
+			}
+			else if (!string.IsNullOrEmpty(runStyle))
+			{
+				var cache = propertyTable.GetValue<LcmCache>("cache", null);
+				cssStyle = CssGenerator.GenerateCssStyleFromLcmStyleSheet(runStyle,
+					cache.WritingSystemFactory.GetWsFromStr(writingSystem), propertyTable);
+			}
+			string css = cssStyle?.ToString();
+			if (!String.IsNullOrEmpty(css))
+				((XmlFragmentWriter)writer).Writer.WriteAttributeString("style", css);
 		}
 
-		public void StartLink(IFragmentWriter writer, Guid destination)
+		public void StartLink(IFragmentWriter writer, ConfigurableDictionaryNode config, Guid destination)
 		{
 			var xw = ((XmlFragmentWriter)writer).Writer;
 			xw.WriteStartElement("a");
 			xw.WriteAttributeString("href", "#g" + destination);
 		}
 
-		public void EndLink(IFragmentWriter writer)
+		public void StartLink(IFragmentWriter writer, ConfigurableDictionaryNode config, string externalLink)
+		{
+			var xw = ((XmlFragmentWriter)writer).Writer;
+			xw.WriteStartElement("a");
+			xw.WriteAttributeString("href", externalLink);
+			xw.WriteAttributeString("target", "_blank");
+	  }
+
+	  public void EndLink(IFragmentWriter writer)
 		{
 			((XmlFragmentWriter)writer).Writer.WriteEndElement(); // </a>
 		}
@@ -747,23 +801,23 @@ namespace SIL.FieldWorks.XWorks
 			((XmlFragmentWriter)writer).Writer.WriteString(txtContent);
 		}
 
-		public void AddLineBreakInRunContent(IFragmentWriter writer)
+		public void AddLineBreakInRunContent(IFragmentWriter writer, ConfigurableDictionaryNode config)
 		{
 			var xw = ((XmlFragmentWriter)writer).Writer;
 			xw.WriteStartElement("br");
 			xw.WriteEndElement();
 		}
 
-		public void StartTable(IFragmentWriter writer)
+		public void StartTable(IFragmentWriter writer, ConfigurableDictionaryNode config)
 		{
 			((XmlFragmentWriter)writer).Writer.WriteStartElement("table");
 		}
 
-		public void AddTableTitle(IFragmentWriter writer, string content)
+		public void AddTableTitle(IFragmentWriter writer, IFragment content)
 		{
 			var xw = ((XmlFragmentWriter)writer).Writer;
 			xw.WriteStartElement("caption");
-			xw.WriteRaw(content);
+			xw.WriteRaw(content.ToString());
 			xw.WriteEndElement(); // </caption>
 		}
 
@@ -781,7 +835,7 @@ namespace SIL.FieldWorks.XWorks
 		/// Adds a &lt;td&gt; element (or &lt;th&gt; if isHead is true).
 		/// If isRightAligned is true, adds the appropriate style element.
 		/// </summary>
-		public void AddTableCell(IFragmentWriter writer, bool isHead, int colSpan, HorizontalAlign alignment, string content)
+		public void AddTableCell(IFragmentWriter writer, bool isHead, int colSpan, HorizontalAlign alignment, IFragment content)
 		{
 			var xw = ((XmlFragmentWriter)writer).Writer;
 			xw.WriteStartElement(isHead ? "th" : "td");
@@ -805,7 +859,7 @@ namespace SIL.FieldWorks.XWorks
 				default:
 					throw new ArgumentOutOfRangeException(nameof(alignment), alignment, null);
 			}
-			xw.WriteRaw(content);
+			xw.WriteRaw(content.ToString());
 			// WriteFullEndElement in case there is no content
 			xw.WriteFullEndElement(); // </td> or </th>
 		}
@@ -821,22 +875,26 @@ namespace SIL.FieldWorks.XWorks
 			((XmlFragmentWriter)writer).Writer.WriteFullEndElement(); // should be </tbody>
 		}
 
-		public void EndTable(IFragmentWriter writer)
+		public void EndTable(IFragmentWriter writer, ConfigurableDictionaryNode config)
 		{
 			((XmlFragmentWriter)writer).Writer.WriteEndElement(); // should be </table>
 		}
 
-		public void StartEntry(IFragmentWriter writer, string className, Guid entryGuid, int index)
+		public void StartEntry(IFragmentWriter writer, ConfigurableDictionaryNode config, string className, Guid entryGuid, int index, RecordClerk clerk)
 		{
 			var xw = ((XmlFragmentWriter)writer).Writer;
 			xw.WriteStartElement("div");
 			xw.WriteAttributeString("class", className);
+			xw.WriteAttributeString("nodeId", $"{config.GetHashCode()}");
 			xw.WriteAttributeString("id", "g" + entryGuid);
 		}
 
-		public void AddEntryData(IFragmentWriter writer, List<string> pieces)
+		public void AddEntryData(IFragmentWriter writer, List<ConfiguredLcmGenerator.ConfigFragment> pieces)
 		{
-			pieces.ForEach(((XmlFragmentWriter)writer).Writer.WriteRaw);
+			foreach (ConfiguredLcmGenerator.ConfigFragment configFrag in pieces)
+			{
+				((XmlFragmentWriter)writer).Writer.WriteRaw(configFrag.Frag.ToString());
+			}
 		}
 
 		public void EndEntry(IFragmentWriter writer)
@@ -844,17 +902,18 @@ namespace SIL.FieldWorks.XWorks
 			EndObject(writer);
 		}
 
-		public void AddCollection(IFragmentWriter writer, bool isBlockProperty,
-			string className, string content)
+		public void AddCollection(IFragmentWriter writer, ConfigurableDictionaryNode config,
+			bool isBlockProperty, string className, IFragment content)
 		{
 			var xw = ((XmlFragmentWriter)writer).Writer;
 			xw.WriteStartElement(isBlockProperty ? "div" : "span");
 			xw.WriteAttributeString("class", className);
-			xw.WriteRaw(content);
+			xw.WriteAttributeString("nodeId", $"{config.GetHashCode()}");
+			xw.WriteRaw(content.ToString());
 			xw.WriteEndElement();
 		}
 
-		public void BeginObjectProperty(IFragmentWriter writer, bool isBlockProperty,
+		public void BeginObjectProperty(IFragmentWriter writer, ConfigurableDictionaryNode config, bool isBlockProperty,
 			string className)
 		{
 			var xw = ((XmlFragmentWriter)writer).Writer;
@@ -867,79 +926,86 @@ namespace SIL.FieldWorks.XWorks
 			((XmlFragmentWriter)writer).Writer.WriteEndElement(); // </div> or </span>
 		}
 
-		public void WriteProcessedContents(IFragmentWriter writer, string contents)
+		public void WriteProcessedContents(IFragmentWriter writer, ConfigurableDictionaryNode config, IFragment contents)
 		{
-			((XmlFragmentWriter)writer).Writer.WriteRaw(contents);
+			((XmlFragmentWriter)writer).Writer.WriteRaw(contents.ToString());
 		}
 
 		/// <summary/>
 		/// <param name="pictureGuid">This is used as an id in the xhtml and must be unique.</param>
-		public string AddImage(string classAttribute, string srcAttribute, string pictureGuid)
+		public IFragment AddImage(ConfigurableDictionaryNode config, string classAttribute, string srcAttribute, string pictureGuid)
 		{
 			var bldr = new StringBuilder();
+			var fragment = new StringFragment(bldr);
 			using (var xw = XmlWriter.Create(bldr, new XmlWriterSettings { ConformanceLevel = ConformanceLevel.Fragment }))
 			{
 				xw.WriteStartElement("img");
 				xw.WriteAttributeString("class", classAttribute);
 				xw.WriteAttributeString("src", srcAttribute);
 				xw.WriteAttributeString("id", "g" + pictureGuid);
+				xw.WriteAttributeString("nodeId", $"{config.GetHashCode()}");
 				xw.WriteEndElement();
 				xw.Flush();
-				return bldr.ToString();
+				return fragment;
 			}
 		}
 
-		public string AddImageCaption(string captionContent)
+		public IFragment AddImageCaption(ConfigurableDictionaryNode config, IFragment captionContent)
 		{
 			var bldr = new StringBuilder();
+			var fragment = new StringFragment(bldr);
 			using (var xw = XmlWriter.Create(bldr, new XmlWriterSettings { ConformanceLevel = ConformanceLevel.Fragment }))
 			{
 				xw.WriteStartElement("div");
 				xw.WriteAttributeString("class", "captionContent");
-				xw.WriteRaw(captionContent);
+				xw.WriteRaw(captionContent.ToString());
 				xw.WriteEndElement();
 				xw.Flush();
-				return bldr.ToString();
+				return fragment;
 			}
 		}
 
-		public string GenerateSenseNumber(string formattedSenseNumber)
+		public IFragment GenerateSenseNumber(ConfigurableDictionaryNode config, string formattedSenseNumber, string senseNumberWs)
 		{
 			var bldr = new StringBuilder();
+			var fragment = new StringFragment(bldr);
 			using (var xw = XmlWriter.Create(bldr, new XmlWriterSettings { ConformanceLevel = ConformanceLevel.Fragment }))
 			{
 				xw.WriteStartElement("span");
 				xw.WriteAttributeString("class", "sensenumber");
+				xw.WriteAttributeString("lang", senseNumberWs);
+				xw.WriteAttributeString("nodeId", $"{config.GetHashCode()}");
 				xw.WriteString(formattedSenseNumber);
 				xw.WriteEndElement();
 				xw.Flush();
-				return bldr.ToString();
+				return fragment;
 			}
 		}
 
-		public string AddLexReferences(bool generateLexType, string lexTypeContent, string className,
-			string referencesContent, bool typeBefore)
+		public IFragment AddLexReferences(ConfigurableDictionaryNode config, bool generateLexType, IFragment lexTypeContent, string className,
+			IFragment referencesContent, bool typeBefore)
 		{
 			var bldr = new StringBuilder(100);
+			var fragment = new StringFragment(bldr);
 			// Generate the factored ref types element (if before).
 			if (generateLexType && typeBefore)
 			{
-				bldr.Append(WriteProcessedObject(false, lexTypeContent, className));
+				bldr.Append(WriteProcessedObject(config, false, lexTypeContent, className));
 			}
 			// Then add all the contents for the LexReferences (e.g. headwords)
-			bldr.Append(referencesContent);
+			bldr.Append(referencesContent.ToString());
 			// Generate the factored ref types element (if after).
 			if (generateLexType && !typeBefore)
 			{
-				bldr.Append(WriteProcessedObject(false, lexTypeContent, className));
+				bldr.Append(WriteProcessedObject(config, false, lexTypeContent, className));
 			}
 
-			return bldr.ToString();
+			return fragment;
 		}
 
-		public void BeginCrossReference(IFragmentWriter writer, bool isBlockProperty, string classAttribute)
+		public void BeginCrossReference(IFragmentWriter writer, ConfigurableDictionaryNode config, bool isBlockProperty, string classAttribute)
 		{
-			BeginObjectProperty(writer, isBlockProperty, classAttribute);
+			BeginObjectProperty(writer, config, isBlockProperty, classAttribute);
 		}
 
 		public void EndCrossReference(IFragmentWriter writer)
@@ -947,27 +1013,35 @@ namespace SIL.FieldWorks.XWorks
 			EndObject(writer);
 		}
 
-		public string WriteProcessedSenses(bool isBlock, string sensesContent, string classAttribute, string sharedGramInfo)
+		public void BetweenCrossReferenceType(IFragment content, ConfigurableDictionaryNode node, bool firstItem)
 		{
-			return WriteProcessedObject(isBlock, sharedGramInfo + sensesContent, classAttribute);
 		}
 
-		public string AddAudioWsContent(string className, Guid linkTarget, string fileContent)
+		public IFragment WriteProcessedSenses(ConfigurableDictionaryNode config, bool isBlock, IFragment sensesContent, string classAttribute, IFragment sharedGramInfo)
+		{
+			sharedGramInfo.Append(sensesContent);
+			return WriteProcessedObject(config, isBlock, sharedGramInfo, classAttribute);
+		}
+
+		public IFragment AddAudioWsContent(string className, Guid linkTarget, IFragment fileContent)
 		{
 			// No additional wrapping required for the xhtml
 			return fileContent;
 		}
 
-		public string GenerateErrorContent(StringBuilder badStrBuilder)
+		public IFragment GenerateErrorContent(StringBuilder badStrBuilder)
 		{
-			return $"<span>\u0FFF\u0FFF\u0FFF<!-- Error generating content for string: '{badStrBuilder}'" +
+			string message = $"<span>\u0FFF\u0FFF\u0FFF<!-- Error generating content for string: '{badStrBuilder}'" +
 				   $" invalid surrogate pairs replaced with \\u0fff --></span>";
+			var fragment = new StringFragment(message);
+			return fragment;
 		}
 
-		public string GenerateVideoLinkContent(string className, string mediaId,
+		public IFragment GenerateVideoLinkContent(ConfigurableDictionaryNode config, string className, string mediaId,
 			string srcAttribute, string caption)
 		{
 			var bldr = new StringBuilder();
+			var fragment = new StringFragment(bldr);
 			using (var xw = XmlWriter.Create(bldr, new XmlWriterSettings { ConformanceLevel = ConformanceLevel.Fragment }))
 			{
 				// This creates a link that will open the video in the same window as the dictionary view/preview
@@ -982,57 +1056,65 @@ namespace SIL.FieldWorks.XWorks
 					xw.WriteRaw("");
 				xw.WriteFullEndElement();
 				xw.Flush();
-				return bldr.ToString();
+				return fragment;
 			}
 		}
 
-		public string AddCollectionItem(bool isBlock, string collectionItemClass, string content)
+		public IFragment AddCollectionItem(ConfigurableDictionaryNode config, bool isBlock, string collectionItemClass, IFragment content, bool first)
 		{
 			var bldr = new StringBuilder();
+			var builder = new StringFragment(bldr);
 			using (var xw = XmlWriter.Create(bldr, new XmlWriterSettings { ConformanceLevel = ConformanceLevel.Fragment }))
 			{
 				xw.WriteStartElement(isBlock ? "div" : "span");
 				xw.WriteAttributeString("class", collectionItemClass);
-				xw.WriteRaw(content);
+				xw.WriteAttributeString("nodeId", $"{config.GetHashCode()}");
+				xw.WriteRaw(content.ToString());
 				xw.WriteEndElement();
 				xw.Flush();
-				return bldr.ToString();
+				return builder;
 			}
 		}
 
-		public string AddProperty(string className, bool isBlockProperty, string content)
+		public IFragment AddProperty(ConfigurableDictionaryNode config, ReadOnlyPropertyTable propTable, string className, bool isBlockProperty, string content, string writingSystem)
 		{
 			var bldr = new StringBuilder();
+			var fragment = new StringFragment(bldr);
 			using (var xw = XmlWriter.Create(bldr,
 				new XmlWriterSettings { ConformanceLevel = ConformanceLevel.Fragment }))
 			{
 				xw.WriteStartElement(isBlockProperty ? "div" : "span");
 				xw.WriteAttributeString("class", className);
+				xw.WriteAttributeString("nodeId", $"{config.GetHashCode()}");
 				xw.WriteString(content);
 				xw.WriteEndElement();
 				xw.Flush();
-				return bldr.ToString();
+				return fragment;
 			}
 		}
 
-		public string AddSenseData(string senseNumberSpan, bool isBlock, Guid ownerGuid,
-			string senseContent, string className)
+		public IFragment AddSenseData(ConfigurableDictionaryNode config, IFragment senseNumberSpan, Guid ownerGuid,
+			IFragment senseContent, bool first)
 		{
+			bool isBlock = ConfiguredLcmGenerator.IsBlockProperty(config);
+			string className = ConfiguredLcmGenerator.GetCollectionItemClassAttribute(config);
 			var bldr = new StringBuilder();
+			var fragment = new StringFragment(bldr);
 			using (var xw = XmlWriter.Create(bldr, new XmlWriterSettings { ConformanceLevel = ConformanceLevel.Fragment }))
 			{
 				// Wrap the number and sense combination in a sensecontent span so that both can be affected by DisplayEachSenseInParagraph
 				xw.WriteStartElement("span");
 				xw.WriteAttributeString("class", "sensecontent");
-				xw.WriteRaw(senseNumberSpan);
+				xw.WriteRaw(senseNumberSpan?.ToString() ?? string.Empty);
 				xw.WriteStartElement(isBlock ? "div" : "span");
 				xw.WriteAttributeString("class", className);
 				xw.WriteAttributeString("entryguid", "g" + ownerGuid);
-				xw.WriteRaw(senseContent);
+				xw.WriteAttributeString("nodeId", $"{config.GetHashCode()}");
+				xw.WriteRaw(senseContent.ToString());
 				xw.WriteEndElement();   // element name for property
 				xw.WriteEndElement();   // </span>
 				xw.Flush();
-				return bldr.ToString();
+				return fragment;
 			}
 		}
 

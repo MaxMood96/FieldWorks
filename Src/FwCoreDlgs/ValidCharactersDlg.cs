@@ -1,4 +1,4 @@
-// Copyright (c) 2008-2019 SIL International
+// Copyright (c) 2008-2023 SIL International
 // This software is licensed under the LGPL, version 2.1 or later
 // (http://www.gnu.org/licenses/lgpl-2.1.html)
 //
@@ -584,7 +584,6 @@ namespace SIL.FieldWorks.FwCoreDlgs
 		private const int kiTabBasedOn = 0;
 		private const int kiTabManual = 1;
 		private const int kiTabData = 2;
-		private const int kiTabUnicode = 3;
 		private const int kiCharCol = 0;
 		private const int kiCharCodeCol = 1;
 		private const int kiCharCountCol = 2;
@@ -670,9 +669,6 @@ namespace SIL.FieldWorks.FwCoreDlgs
 				m_wsManager = cache.ServiceLocator.WritingSystemManager;
 
 			m_lblWsName.Text = string.Format(m_lblWsName.Text, wsName);
-
-			// TE-6839: Temporarily remove Unicode tab (not yet implemented).
-			tabCtrlAddFrom.TabPages.Remove(tabCtrlAddFrom.TabPages[kiTabUnicode]);
 
 			m_fntForSpecialChar = new Font(SystemFonts.IconTitleFont.FontFamily, 8f);
 			Font fnt = new Font(m_ws.DefaultFontName, 16);
@@ -965,10 +961,6 @@ namespace SIL.FieldWorks.FwCoreDlgs
 
 						m_validCharsGridMngr.AddCharacters(chars);
 					}
-
-					break;
-
-				case kiTabUnicode:
 					break;
 			}
 
@@ -1273,6 +1265,7 @@ namespace SIL.FieldWorks.FwCoreDlgs
 			foreach (string c in UnicodeSet.ToCharacters(CustomIcu.GetExemplarCharacters(icuLocale)))
 			{
 				chars.Add(c.Normalize(NormalizationForm.FormD));
+				// ENHANCE (Hasso) 2022.02: use CaseFunctions (checks for CaseAlias, but users can still add any character that's already uppercase)
 				chars.Add(UnicodeString.ToUpper(c, icuLocale).Normalize(NormalizationForm.FormD));
 			}
 			m_validCharsGridMngr.AddCharacters(chars);
@@ -1310,9 +1303,6 @@ namespace SIL.FieldWorks.FwCoreDlgs
 
 				case kiTabData:
 					btnAddCharacters.Enabled = (gridCharInventory.RowCount > 0);
-					break;
-
-				case kiTabUnicode:
 					break;
 			}
 			if (fUseWsKeyboard)
@@ -1639,9 +1629,6 @@ namespace SIL.FieldWorks.FwCoreDlgs
 				case kiTabData:
 					helpTopicKey = "khtpValidCharsTabData";
 					break;
-				case kiTabUnicode:		//This tab is not currently visible so this help topic does not exist yet.
-					helpTopicKey = "khtpValidCharsTabUnicode";
-					break;
 			}
 
 			ShowHelp.ShowHelpTopic(m_helpTopicProvider, helpTopicKey);
@@ -1880,7 +1867,7 @@ namespace SIL.FieldWorks.FwCoreDlgs
 		/// ------------------------------------------------------------------------------------
 		protected virtual void ShowMessageBox(string message)
 		{
-			MessageBoxUtils.Show(this, message, m_app.ApplicationName, MessageBoxButtons.OK,
+			MessageBoxUtils.Show(this, message, m_app?.ApplicationName, MessageBoxButtons.OK,
 				MessageBoxIcon.Information);
 		}
 

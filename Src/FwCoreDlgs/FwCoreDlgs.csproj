@@ -1,5 +1,5 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="15.0">
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="Current">
   <PropertyGroup>
     <ProjectType>Local</ProjectType>
     <ProductVersion>9.0.21022</ProductVersion>
@@ -22,7 +22,7 @@
     <RootNamespace>SIL.FieldWorks.FwCoreDlgs</RootNamespace>
     <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
     <OldToolsVersion>3.5</OldToolsVersion>
-    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
     <PublishUrl>publish\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Disk</InstallFrom>
@@ -135,6 +135,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="netstandard" />
     <Reference Include="SIL.Core.Desktop, Version=4.1.0.0, Culture=neutral, PublicKeyToken=cab3c8c5232dfcf2, processorArchitecture=x86">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\Output\Debug\SIL.Core.Desktop.dll</HintPath>
@@ -198,14 +199,19 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\Output\Debug\FwUtils.dll</HintPath>
     </Reference>
+    <Reference Include="XCore">
+      <Name>XCore</Name>
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\Output\Debug\XCore.dll</HintPath>
+    </Reference>
     <Reference Include="icu.net">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\Output\Debug\icu.net.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="Microsoft.Practices.ServiceLocation, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="CommonServiceLocator, Version=1.4.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\DistFiles\Microsoft.Practices.ServiceLocation.dll</HintPath>
+      <HintPath>..\..\Output\Debug\CommonServiceLocator.dll</HintPath>
     </Reference>
     <Reference Include="Reporting, Version=1.0.2327.30181, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -447,6 +453,9 @@
     </Compile>
     <Compile Include="MoveOrCopyFilesDlg.Designer.cs">
       <DependentUpon>MoveOrCopyFilesDlg.cs</DependentUpon>
+    </Compile>
+    <Compile Include="PicturePropertiesDialog.Designer.cs">
+      <DependentUpon>PicturePropertiesDialog.cs</DependentUpon>
     </Compile>
     <Compile Include="ProjectLocationDlg.cs">
       <SubType>Form</SubType>
@@ -805,8 +814,4 @@
   <PropertyGroup>
     <DistFiles>../../DistFiles</DistFiles>
   </PropertyGroup>
-  <Target Name="AfterBuild">
-    <!-- This monkey patch should keep our program from crashing on startup until we can update to .NET 4.6.2 and fix it right -->
-    <Copy SourceFiles="..\..\packages\System.ValueTuple.4.5.0\lib\net461\System.ValueTuple.dll" DestinationFolder="$(OutputPath)" />
-  </Target>
 </Project>

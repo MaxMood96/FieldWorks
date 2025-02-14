@@ -1,7 +1,8 @@
-// Copyright (c) 2015-2019 SIL International
+// Copyright (c) 2015-2021 SIL International
 // This software is licensed under the LGPL, version 2.1 or later
 // (http://www.gnu.org/licenses/lgpl-2.1.html)
 
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
@@ -31,9 +32,8 @@ namespace SIL.FieldWorks.Common.Controls
 		/// <returns>Null if the operation was cancelled or otherwise did not work. The full pathname of an fwdata file, if it did work.</returns>
 		public static string ObtainProjectFromAnySource(Form parent, IHelpTopicProvider helpTopicProvider, out ObtainedProjectType obtainedProjectType)
 		{
-			var liftVersion = "0.13_ldml3";
 			var success = FLExBridgeHelper.LaunchFieldworksBridge(FwDirectoryFinder.ProjectsDirectory, null, FLExBridgeHelper.Obtain, null,
-				LcmCache.ModelVersion, liftVersion, null, null, out _, out var projectFileFullPath);
+				LcmCache.ModelVersion, FLExBridgeHelper.LiftVersion, null, null, out _, out var projectFileFullPath);
 			if (!success)
 			{
 				ReportDuplicateBridge();
@@ -55,15 +55,26 @@ namespace SIL.FieldWorks.Common.Controls
 
 			Analytics.Track("CreateFromSRRepo", new Dictionary<string, string>
 			{
-				{
-					"type", obtainedProjectType.ToString()
-				},
-				{
-					"modelVersion", LcmCache.ModelVersion.ToString()
-				},
-				{ "liftVersion", liftVersion }
+				{ "type", obtainedProjectType.ToString() },
+				{ "modelVersion", LcmCache.ModelVersion.ToString() },
+				{ "liftVersion", FLExBridgeHelper.LiftVersion }
 			});
 			EnsureLinkedFoldersExist(projectFileFullPath);
+
+			return projectFileFullPath;
+		}
+
+		/// <summary>
+		/// Get a new FW project from the specified Mercurial repository.
+		/// </summary>
+		/// <returns>Null if the operation was cancelled or otherwise did not work. The full pathname of an fwdata file, if it did work.</returns>
+		public static string ObtainProject(Uri repoUri, string repoName, string userName, string passWord, string repoIdentifier, out ObtainedProjectType obtainedProjectType)
+		{
+			var result = FLExBridgeHelper.LaunchFieldworksBridge(FwDirectoryFinder.ProjectsDirectory, userName, FLExBridgeHelper.Obtain, null,
+				LcmCache.ModelVersion, FLExBridgeHelper.LiftVersion, null, null, out _, out var projectFileFullPath, repoUri, repoName, passWord, repoIdentifier);
+
+			//Assume project type
+			obtainedProjectType = result ? ObtainedProjectType.FieldWorks : ObtainedProjectType.None;
 
 			return projectFileFullPath;
 		}

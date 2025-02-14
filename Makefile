@@ -10,7 +10,7 @@ FW_PACKAGE_DEBUG ?= false
 BUILD_TOOL = msbuild
 # Verbosity: normal or detailed
 MSBUILD_ARGS ?= -verbosity:normal
-ICU_VERSION = 54
+ICU_VERSION = 70
 BUILD_ROOT = $(shell pwd)
 include $(BUILD_ROOT)/Bld/_names.mak
 BUILD_PRODUCT = FieldWorks
@@ -104,7 +104,7 @@ install-tree-fdo:
 	# For reasons I don't understand we need strings-en.txt otherwise the tests fail when run from xbuild
 	install -m 644 DistFiles/strings-en.txt $(DESTDIR)$(INSTALLATION_PREFIX)/share/fieldworks
 	install -m 644 DistFiles/*.{xml,map,tec,dtd} $(DESTDIR)$(INSTALLATION_PREFIX)/share/fieldworks
-	cp -pdr DistFiles/{Ethnologue,Icu54,Templates} $(DESTDIR)$(INSTALLATION_PREFIX)/share/fieldworks
+	cp -pdr DistFiles/{Ethnologue,Icu70,Templates} $(DESTDIR)$(INSTALLATION_PREFIX)/share/fieldworks
 	# Remove unwanted items
 	case $(ARCH) in i686) OTHERWIDTH=64;; x86_64) OTHERWIDTH=32;; esac; \
 	rm -f $(DESTDIR)$(INSTALLATION_PREFIX)/lib/fieldworks/lib{xample,patr}$$OTHERWIDTH.so
@@ -130,6 +130,7 @@ install-tree: fieldworks-flex.1.gz unicodechareditor.1.gz install-tree-fdo
 	install Bin/ReadKey.exe $(DESTDIR)$(INSTALLATION_PREFIX)/lib/fieldworks
 	install Bin/WriteKey.exe $(DESTDIR)$(INSTALLATION_PREFIX)/lib/fieldworks
 	install Lib/linux/fieldworks-flex $(DESTDIR)$(INSTALLATION_PREFIX)/bin
+	install Lib/linux/fieldworks-lcmbrowser $(DESTDIR)$(INSTALLATION_PREFIX)/bin
 	install Lib/linux/unicodechareditor $(DESTDIR)$(INSTALLATION_PREFIX)/bin
 	install Lib/linux/{run-app,extract-userws.xsl,launch-xchm} $(DESTDIR)$(INSTALLATION_PREFIX)/lib/fieldworks
 	install -m 644 environ{,-xulrunner} $(DESTDIR)$(INSTALLATION_PREFIX)/lib/fieldworks
@@ -149,8 +150,8 @@ install-tree: fieldworks-flex.1.gz unicodechareditor.1.gz install-tree-fdo
 	rm -f $(DESTDIR)$(INSTALLATION_PREFIX)/lib/fieldworks/lib{ecdriver,IcuConvEC,IcuRegexEC,IcuTranslitEC,PyScriptEncConverter}*.so
 	rm -f $(DESTDIR)$(INSTALLATION_PREFIX)/lib/fieldworks/{AIGuesserEC,CcEC,IcuEC,PerlExpressionEC,PyScriptEC,SilEncConverters40,ECInterfaces}.dll{,.config}
 	rm -f $(DESTDIR)$(INSTALLATION_PREFIX)/lib/fieldworks/libTECkit{,_Compiler}*.so
-	rm -Rf $(DESTDIR)$(INSTALLATION_PREFIX)/lib/share/fieldworks/Icu54/tools
-	rm -f $(DESTDIR)$(INSTALLATION_PREFIX)/lib/share/fieldworks/Icu54/Keyboards
+	rm -Rf $(DESTDIR)$(INSTALLATION_PREFIX)/lib/share/fieldworks/Icu70/tools
+	rm -f $(DESTDIR)$(INSTALLATION_PREFIX)/lib/share/fieldworks/Icu70/Keyboards
 	# Windows dll and exe files.
 	rm -f $(DESTDIR)$(INSTALLATION_PREFIX)/lib/fieldworks/{aspell-15,iconv,libglib-2.0-0,libglib-2.0-0-vs8,libgmodule-2.0-0,libgmodule-2.0-0-vs8,TextFormStorage,unicows,wrtXML,xample32,xample64,XceedZip,xmlparse_u}.dll
 	rm -f $(DESTDIR)$(INSTALLATION_PREFIX)/lib/fieldworks/{SFconv,TxtConv,vs_piaredist,ZEdit}.exe

@@ -180,6 +180,11 @@
 				<string class="LexSense" field="Gloss" ws="analysis"/>
 			</para>
 		</part>
+		<part id="LexSense-Jt-ExemplarForSense" type="jtview">
+			<para>
+				<string class="LexSense" field="Exemplar" ws="vernacular"/>
+			</para>
+		</part>
 		<part id="LexSense-Jt-DefinitionsForSense" type="jtview">
 			<para>
 				<string class="LexSense" field="Definition" ws="analysis"/>
@@ -209,11 +214,18 @@
 			<obj class="LexSense" field="MorphoSyntaxAnalysis" layout="empty">
 				<if is="MoStemMsa">
 					<obj class="MoStemMsa" field="MsFeatures" layout="empty">
-						<string field="ChooserNameTS"/>
+						<string field="LongNameTSS"/>
+					</obj>
+				</if>
+				<if is="MoInflAffMsa">
+					<obj class="MoInflAffMsa" field="InflFeats" layout="empty">
+						<string field="LongNameTSS"/>
 					</obj>
 				</if>
 				<ifnot is="MoStemMsa">
-					<lit>n/a</lit>
+					<ifnot is="MoInflAffMsa">
+						<lit>n/a</lit>
+					</ifnot>
 				</ifnot>
 			</obj>
 		</part>
@@ -505,7 +517,9 @@
 				</properties>
 			</slice>
 		</part>
-
+		<part id="LexSense-Detail-Exemplar" type="detail">
+			<slice field="Exemplar" label="Exemplar" editor="multistring" ws="all vernacular" menu="mnuDataTree-Help" tooltip="Examples of inflected forms for this sense." />
+		</part>
 		<part id="LexSense-Jt-GlossIfNoDefn" type="detail">
 			<if field="Definition" stringaltequals="" ws="analysis">
 				<ifnot field="Gloss" stringaltequals="" ws="analysis">

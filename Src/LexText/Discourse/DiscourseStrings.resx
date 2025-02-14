@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -432,9 +432,6 @@ you expect.</value>
   <data name="ksCreateNewTemplate" xml:space="preserve">
     <value>Add a New Template</value>
   </data>
-  <data name="ksNewTemplateLink" xml:space="preserve">
-    <value>charttempEdit</value>
-  </data>
   <data name="ksRedoLastRowInPara" xml:space="preserve">
     <value>Redo Last Row in Paragraph</value>
   </data>
@@ -452,7 +449,13 @@ you expect.</value>
     <comment>Title of informational message box shown from 'Add a new Template' in the Text Chart tab of interlinear</comment>
   </data>
   <data name="ksNewConstChartMessage" xml:space="preserve">
-    <value>You will now be taken to a new empty chart template. Give the template a name and create groups and rows. Then, click the "Back" button on the toolbar to return to where you were working. The new chart template will then be available for you to choose.</value>
+    <value>You will now be taken to a new empty chart template. Give the template a name and create groups and columns. Then, click the "Back" button on the toolbar to return to where you were working. The new chart template will then be available for you to choose.</value>
     <comment>Informational message shown when the user chooses 'Add a new Template' in the Text Chart tab of interlinear</comment>
+  </data>
+  <data name="ksDeletedNotesLocation" xml:space="preserve">
+    <value>Deleted notes have been saved in {0}</value>
+  </data>
+  <data name="ksInformation" xml:space="preserve">
+    <value>Information</value>
   </data>
 </root>

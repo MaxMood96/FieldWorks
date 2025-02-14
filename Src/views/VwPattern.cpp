@@ -963,12 +963,17 @@ public:
 			// We can't if we're at the limit already.
 			if (m_ichLimFoundSearch == m_ichLimSearch)
 				return true;
+			// We can not increment by half of a surrogate pair and expect good results
+			int nextCharBoundary = 1;
+			if (IsHighSurrogate(*reinterpret_cast<const wchar_t *>(m_pchBuf + m_ichLimFoundSearch)))
+				++nextCharBoundary;
+
 			// Try incrementing it...
-			m_ichLimFoundSearch++;
+			m_ichLimFoundSearch += nextCharBoundary;
 			// See if this is still a good match.
 			if (!CheckMatchAndProps())
 			{
-				m_ichLimFoundSearch--;
+				m_ichLimFoundSearch -= nextCharBoundary;
 				break;
 			}
 		}
@@ -1261,7 +1266,7 @@ public:
 		const OLECHAR * pchBufMatch;
 		int cchMatch;
 		CheckHr(qtssMatch->LockText(&pchBufMatch, &cchMatch));
-		const OLECHAR * pchBufPattern;
+		const wchar * pchBufPattern;
 		int cchPattern;
 		CheckHr(m_pat->m_qtssReducedPattern->LockText(&pchBufPattern, &cchPattern));
 		bool fMatch = true; // unless we find otherwise
@@ -1278,8 +1283,8 @@ public:
 				fMatch = false; // singleton for a given set of props, should be exact same objects.
 				break;
 			}
-			if (m_pat->m_pcoll->compare(pchBufMatch + triMatch.ichMin, triMatch.ichLim - triMatch.ichMin,
-				pchBufPattern + triPattern.ichMin, triPattern.ichLim - triPattern.ichMin) != 0)
+			if (m_pat->m_pcoll->compare(reinterpret_cast<const UChar*>(pchBufMatch + triMatch.ichMin), triMatch.ichLim - triMatch.ichMin,
+				reinterpret_cast<const UChar*>(pchBufPattern + triPattern.ichMin), triPattern.ichLim - triPattern.ichMin) != 0)
 			{
 				fMatch = false; // singleton for a given set of props, should be exact same objects.
 				break;
@@ -1335,7 +1340,7 @@ public:
 		// locale/rules, match case, match diacritics, and match whole word.
 		if (m_pat->m_stuRules.Length() > 0)
 		{
-			if (m_pat->m_stuRules.Chars()[0] == '#')
+			if (m_pat->m_stuRules.Chars()[0] == '#' && (m_pat->m_prcoll == NULL))
 			{
 				// Special trick case: this is not a valid start for an ICU collation, we use it to mark
 				// a language that wants a collation like some other language, whose locale is specified in the rest
@@ -1893,7 +1898,7 @@ void VwPattern::RemoveIgnorableRuns(ITsString * ptssIn, ITsString ** pptssOut)
 		int cchRun = tri.ichLim - tri.ichMin;
 		OLECHAR dummy;
 		// If this is an empty TSS, we also want to copy appropriate run props (at least the required WS)
-		if (m_pcoll->compare(&dummy, 0, pchBuf + tri.ichMin, cchRun) != 0 || !cch)
+		if (m_pcoll->compare(reinterpret_cast<const UChar*>(&dummy), 0, reinterpret_cast<const UChar*>(pchBuf + tri.ichMin), cchRun) != 0 || !cch)
 		{
 			// Not ignorable. Figure the props we care about.
 			ITsPropsBldrPtr qtpb;
@@ -2044,6 +2049,7 @@ void VwPattern::Compile()
 		}
 		if (m_stuRules.Length() > 0)
 		{
+			bool specialTrickCase = false;
 			if (m_stuRules.Chars()[0] == '#')
 			{
 				// Special trick case: this is not a valid start for an ICU collation, we use it to mark
@@ -2053,10 +2059,18 @@ void VwPattern::Compile()
 				Locale otherLocale = Locale::createFromName(staOtherLocale.Chars());
 				m_pcoll = Collator::createInstance(otherLocale, error);
 				if (U_FAILURE(error))
-					ThrowHr(E_FAIL);
-				m_pcoll->setStrength(m_strength);
+				{
+					// The '#' could represent a comment instead of this 'Special trick case'. LT-21433
+					// Instead of treating this as an exception treat it as a rule starting with a comment.
+					error = U_ZERO_ERROR;
+				}
+				else
+				{
+					m_pcoll->setStrength(m_strength);
+					specialTrickCase = true;
+				}
 			}
-			else
+			if(!specialTrickCase)
 			{
 				// Make a rule-based collater and an iterator based on it.
 				m_pcoll = m_prcoll = new RuleBasedCollator(m_stuRules.Chars(), m_strength, error);

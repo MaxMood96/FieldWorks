@@ -17,7 +17,11 @@
 		<command id="CmdParseWordsInCurrentText" label="Parse Words in Te_xt" message="ParseWordsInCurrentText"/>
 		<command id="CmdClearSelectedWordParserAnalyses" label="Clear Current Parser _Analyses" message="ClearSelectedWordParserAnalyses"/>
 		<command id="CmdReInitializeParser" label="Re_load Grammar / Lexicon" message="ReInitParser" tooltip="Reloads data from the Grammar and Lexicon, so the parser uses your latest changes."/>
-		<command id="CmdImportWordSet" label="_Import Word Set..." message="ImportWordSet"/>
+        <command id="CmdCheckParserOnCurrentText" label="On Current Text" message="CheckParserOnCurrentText" tooltip="Checks parser on currrent text and reports results."/>
+        <command id="CmdCheckParserOnGenre" label="On Genre" message="CheckParserOnGenre" tooltip="Checks parser on texts in the selected genre and reports results."/>
+        <command id="CmdCheckParserOnAll" label="On All Texts" message="CheckParserOnAll" tooltip="Checks parser on all texts and reports results."/>
+        <command id="CmdShowParserReports" label="Show Test Reports..." message="ShowParserReports" tooltip="Shows test reports."/>
+        <command id="CmdImportWordSet" label="_Import Word Set..." message="ImportWordSet"/>
 		<command id="CmdChooseXAmpleParser" label="Default Parser (XAmple)" message="ChooseParser">
 			<parameters parser="XAmple"/>
 		</command>
@@ -76,6 +80,7 @@
 		<command id="CmdConfigureInterlinear" label="Interlinear..." message="ConfigureInterlinear"/>
 		<command id="CmdExportInterlinear" label="_Export Interlinear..." message="ExportInterlinear"/>
 		<command id="CmdExportDiscourseChart" label="Export Discourse Chart..." message="ExportDiscourse"/>
+		<command id="CmdExportConcordanceResult" label="Export Concordance Results..." message="ExportConcordanceResults"/>
 		<!-- the next two commands duplicate another shortcut, and should not be shown or enabled at the same time as
 			  the focus-box moving commands-->
 		<command id="CmdRepeatLastMoveLeft" label="Move _Left (last thing moved)" message="RepeatLastMoveLeft" shortcut="Ctrl+Left"/>
@@ -270,15 +275,21 @@
 	  <item command="CmdParseWordsInCurrentText"/>
 	  <item command="CmdParseCurrentWord"/>
 	  <item command="CmdClearSelectedWordParserAnalyses" defaultVisible="false"/>
-			<item label="-" translate="do not translate"/>
+          <item label="-" translate="do not translate"/>
+          <menu id="CheckParserMenu" label="Run Tests">
+            <item command="CmdCheckParserOnCurrentText"/>
+            <item command="CmdCheckParserOnGenre"/>
+            <item command="CmdCheckParserOnAll"/>
+            <item command="CmdShowParserReports"/>
+          </menu>
 			<menu id="ChooseParserMenu" label="Choose Parser">
 				<item command="CmdChooseXAmpleParser"/>
 				<item command="CmdChooseHCParser"/>
 			</menu>
-	  <item command="CmdEditParserParameters"/>
+          <item command="CmdEditParserParameters"/>
 		</menu>
 		<include path="Extensions/*/AreaConfigurationExtension.xml" query="root/menubar/*"/>
-	</menubar>
+    </menubar>
 	<!-- ********************************************************** -->
 	<!-- ************************ menuAddOn *********************** -->
 	<!-- ********************************************************** -->
@@ -286,6 +297,7 @@
 		<menu id="FileExport">
 			<item command="CmdExportInterlinear" defaultVisible="false"/>
 			<item command="CmdExportDiscourseChart" defaultVisible="false"/>
+			<item command="CmdExportConcordanceResult" defaultVisible="false"/>
 		</menu>
 		<menu id="Edit">
 			<item command="CmdGoToWfiWordform" defaultVisible="false"/>

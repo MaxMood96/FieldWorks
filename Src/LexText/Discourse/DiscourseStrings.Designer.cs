@@ -19,7 +19,7 @@ namespace SIL.FieldWorks.Discourse {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "16.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class DiscourseStrings {
@@ -169,6 +169,15 @@ namespace SIL.FieldWorks.Discourse {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Deleted notes have been saved in {0}.
+        /// </summary>
+        internal static string ksDeletedNotesLocation {
+            get {
+                return ResourceManager.GetString("ksDeletedNotesLocation", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to This will delete {0} rows of data from your chart! Are you sure?.
         /// </summary>
         internal static string ksDelRowWarning {
@@ -251,6 +260,15 @@ namespace SIL.FieldWorks.Discourse {
         internal static string ksFoundAndFixingInvalidDataCells {
             get {
                 return ResourceManager.GetString("ksFoundAndFixingInvalidDataCells", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Information.
+        /// </summary>
+        internal static string ksInformation {
+            get {
+                return ResourceManager.GetString("ksInformation", resourceCulture);
             }
         }
         
@@ -444,20 +462,11 @@ namespace SIL.FieldWorks.Discourse {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to You will now be taken to a new empty chart template. Give the template a name and create groups and rows. Then, click the &quot;Back&quot; button on the toolbar to return to where you were working. The new chart template will then be available for you to choose..
+        ///   Looks up a localized string similar to You will now be taken to a new empty chart template. Give the template a name and create groups and columns. Then, click the &quot;Back&quot; button on the toolbar to return to where you were working. The new chart template will then be available for you to choose..
         /// </summary>
         internal static string ksNewConstChartMessage {
             get {
                 return ResourceManager.GetString("ksNewConstChartMessage", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to charttempEdit.
-        /// </summary>
-        internal static string ksNewTemplateLink {
-            get {
-                return ResourceManager.GetString("ksNewTemplateLink", resourceCulture);
             }
         }
         

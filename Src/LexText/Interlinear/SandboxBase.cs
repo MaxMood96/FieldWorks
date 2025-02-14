@@ -17,12 +17,15 @@ using SIL.FieldWorks.Common.FwUtils;
 using SIL.FieldWorks.Common.ViewsInterfaces;
 using SIL.FieldWorks.FdoUi;
 using SIL.FieldWorks.Common.Widgets;
-using XCore;
 using SIL.LCModel.DomainServices;
 using SIL.LCModel.Infrastructure;
 using SIL.LCModel.Core.Cellar;
 using SIL.LCModel.Core.Text;
 using SIL.LCModel.Core.KernelInterfaces;
+using SIL.PlatformUtilities;
+using XCore;
+using SIL.WritingSystems;
+using Icu.Collation;
 
 namespace SIL.FieldWorks.IText
 {
@@ -297,8 +300,8 @@ namespace SIL.FieldWorks.IText
 
 		protected CaseFunctions VernCaseFuncs(ITsString tss)
 		{
-			string locale = m_caches.MainCache.ServiceLocator.WritingSystemManager.Get(TsStringUtils.GetWsAtOffset(tss, 0)).IcuLocale;
-			return new CaseFunctions(locale);
+			var ws = m_caches.MainCache.ServiceLocator.WritingSystemManager.Get(TsStringUtils.GetWsAtOffset(tss, 0));
+			return new CaseFunctions(ws);
 		}
 
 		protected bool ComboOnMouseHover
@@ -1037,7 +1040,7 @@ namespace SIL.FieldWorks.IText
 		protected override void OnHandleCreated(EventArgs e)
 		{
 			base.OnHandleCreated(e);
-			if (MiscUtils.IsMono && (Form.ActiveForm as XWorks.FwXWindow) != null)
+			if (Platform.IsMono && (Form.ActiveForm as XWorks.FwXWindow) != null)
 			{
 				(Form.ActiveForm as XWorks.FwXWindow).DesiredControl = this;
 			}
@@ -1050,7 +1053,7 @@ namespace SIL.FieldWorks.IText
 		protected override void OnHandleDestroyed(EventArgs e)
 		{
 			base.OnHandleDestroyed(e);
-			if (MiscUtils.IsMono && (Form.ActiveForm as XWorks.FwXWindow) != null)
+			if (Platform.IsMono && (Form.ActiveForm as XWorks.FwXWindow) != null)
 			{
 				(Form.ActiveForm as XWorks.FwXWindow).DesiredControl = null;
 			}
@@ -1076,7 +1079,7 @@ namespace SIL.FieldWorks.IText
 
 		private void SubscribeToRootSiteEventHandlerEvents()
 		{
-			if (MiscUtils.IsMono)
+			if (Platform.IsMono)
 			{
 				var ibusRootSiteEventHandler = m_rootSiteEventHandler as IbusRootSiteEventHandler;
 				if (ibusRootSiteEventHandler != null)
@@ -1205,7 +1208,11 @@ namespace SIL.FieldWorks.IText
 					if (analysis != null)
 					{
 						//set the color before we fidle with our the wordform, it right for this purpose now.
-						if (GetHasMultipleRelevantAnalyses(CurrentAnalysisTree.Wordform))
+						if ((m_occurrenceSelected == null ||
+							m_occurrenceSelected.Analysis == null ||
+							(m_occurrenceSelected.Analysis.Analysis == null &&
+							m_occurrenceSelected.Analysis.Wordform != null)) &&
+							GetHasMultipleRelevantAnalyses(CurrentAnalysisTree.Wordform))
 						{
 							MultipleAnalysisColor = InterlinVc.MultipleApprovedGuessColor;
 						}
@@ -1318,9 +1325,14 @@ namespace SIL.FieldWorks.IText
 						}
 						else
 						{
-							// Create the secondary object corresponding to the MoForm in the usual way from the form object.
-							hvoMorphForm = CreateSecondaryAndCopyStrings(InterlinLineChoices.kflidMorphemes, mf.Hvo,
-																		 MoFormTags.kflidForm, hvoSbWord, sdaMain, cda);
+							hvoMorphForm = m_caches.FindOrCreateSec(mf.Hvo, kclsidSbNamedObj, hvoSbWord, ktagSbWordDummy);
+							if (IsLexicalPattern(mf.Form))
+								// If mf.Form is a lexical pattern then mb.Form is the guessed root.
+								CopyStringsToSecondary(InterlinLineChoices.kflidMorphemes, sdaMain, mb.Hvo,
+									WfiMorphBundleTags.kflidForm, cda, hvoMorphForm, ktagSbNamedObjName);
+							else
+								CopyStringsToSecondary(InterlinLineChoices.kflidMorphemes, sdaMain, mf.Hvo,
+									MoFormTags.kflidForm, cda, hvoMorphForm, ktagSbNamedObjName);
 							// Store the prefix and postfix markers from the MoMorphType object.
 							int hvoMorphType = sdaMain.get_ObjectProp(mf.Hvo,
 																	  MoFormTags.kflidMorphType);
@@ -1458,6 +1470,22 @@ namespace SIL.FieldWorks.IText
 				}
 			}
 			return fGuessing != 0;
+		}
+
+		/// <summary>
+		/// Does multiString contain a lexical pattern (e.g. [Seg]*)?
+		/// </summary>
+		public static bool IsLexicalPattern(IMultiUnicode multiString)
+		{
+			// This assumes that "[" and "]" are not part of any phonemes.
+			for (var i = 0; i < multiString.StringCount; i++)
+			{
+				int ws;
+				string text = multiString.GetStringFromIndex(i, out ws).Text;
+				if (text.Contains("[") && text.Contains("]"))
+					return true;
+			}
+			return false;
 		}
 
 		public static bool GetHasMultipleRelevantAnalyses(IWfiWordform analysis)
@@ -1634,7 +1662,7 @@ namespace SIL.FieldWorks.IText
 
 			if (InterlinDoc == null) // In Wordform Analyses tool and some unit tests, InterlinDoc is null
 				return;
-			ISilDataAccess sda = InterlinDoc.RootBox.DataAccess;
+			var guessCache = InterlinDoc.GetGuessCache();
 
 			// If we're calling from the context of SetWordform(), we may be trying to establish
 			// an alternative wordform/form/analysis. In that case, or if we don't have a default cached,
@@ -1649,18 +1677,41 @@ namespace SIL.FieldWorks.IText
 			{
 				// Try to establish a default based on the current occurrence.
 				if (m_fSetWordformInProgress ||
-					!sda.get_IsPropInCache(HvoAnnotation, InterlinViewDataCache.AnalysisMostApprovedFlid,
+					!guessCache.get_IsPropInCache(m_occurrenceSelected, InterlinViewDataCache.AnalysisMostApprovedFlid,
 						(int) CellarPropertyType.ReferenceAtomic, 0))
 				{
 					InterlinDoc.RecordGuessIfNotKnown(m_occurrenceSelected);
 				}
-				hvoDefault = sda.get_ObjectProp(HvoAnnotation, InterlinViewDataCache.AnalysisMostApprovedFlid);
+				hvoDefault = guessCache.get_ObjectProp(m_occurrenceSelected, InterlinViewDataCache.AnalysisMostApprovedFlid);
 				// In certain cases like during an undo the Decorator data might be stale, so validate the result before we continue
 				// to prevent using data that does not exist anymore
 				if(!Cache.ServiceLocator.IsValidObjectId(hvoDefault))
 					hvoDefault = 0;
+				if (hvoDefault != 0 && m_fSetWordformInProgress)
+				{
+					// Verify that the guess includes the wordform set by the user.
+					// (The guesser may have guessed a lowercase wordform for an uppercase occurrence.)
+					// If it doesn't include the wordform, set hvoDefault to 0.
+					var obj = m_caches.MainCache.ServiceLocator.GetObject(hvoDefault);
+					IWfiWordform guessWf = null;
+					switch (obj.ClassID)
+					{
+						case WfiAnalysisTags.kClassId:
+							guessWf = ((IWfiAnalysis)obj).Wordform;
+							break;
+						case WfiGlossTags.kClassId:
+							guessWf = ((IWfiGloss)obj).Wordform;
+							break;
+						case WfiWordformTags.kClassId:
+							guessWf = (IWfiWordform)obj;
+							break;
+					}
+					if (guessWf != null && guessWf != wordform)
+						hvoDefault = 0;
+				}
+
 			}
-			else
+			if (hvoDefault == 0)
 			{
 				// Try to establish a default based on the wordform itself.
 				int ws = wordform.Cache.DefaultVernWs;
@@ -1964,25 +2015,45 @@ namespace SIL.FieldWorks.IText
 			CheckDisposed();
 			// Find all the matching morphs and count how often used in WfiAnalyses
 			int ws = RawWordformWs;
+			// Use ICU Rules if available, otherwise default search
+			var wsObj = Cache.ServiceLocator.WritingSystemManager.Get(ws);
+			var rules = wsObj.DefaultCollation as IcuRulesCollationDefinition;
+			var srules = rules != null && rules.IsValid ? rules.IcuRules: string.Empty;
 			// Fix FWR-2098 GJM: The definition of 'IsAmbiguousWith' seems not to include 'IsSameAs'.
-			var morphs = (from mf in Cache.ServiceLocator.GetInstance<IMoFormRepository>().AllInstances()
-						  where mf.Form.get_String(ws).Text == form && mf.MorphTypeRA != null
-							&& (mf.MorphTypeRA == mmt || mf.MorphTypeRA.IsAmbiguousWith(mmt))
-						  select mf).ToList();
-			if (morphs.Count == 1)
-				return morphs.First(); // special case: we can avoid the cost of figuring ReferringObjects.
-			IMoForm bestMorph = null;
-			var bestMorphCount = -1;
-			foreach (var mf in morphs)
+			using (var icuCollator = new RuleBasedCollator(srules))
 			{
-				int count = (from source in mf.ReferringObjects where source is IWfiMorphBundle select source).Count();
-				if (count > bestMorphCount)
+				string sWs = WritingSystemFactory.GetStrFromWs(ws);
+				var morphs = (from mf in Cache.ServiceLocator.GetInstance<IMoFormRepository>().AllInstances()
+							  where icuCollator.Compare(mf.Form.get_String(ws).Text, form) == 0 && mf.MorphTypeRA != null
+								  && (mf.MorphTypeRA == mmt || mf.MorphTypeRA.IsAmbiguousWith(mmt))
+							  select mf).ToList();
+
+				if (morphs.Count == 0)
 				{
-					bestMorphCount = count;
-					bestMorph = mf;
+					// Look for morphs in matching morph bundles with lexical patterns.
+					// If morph is a lexical pattern then the morph bundle's Form is the guessed root.
+					morphs = (from mb in Cache.ServiceLocator.GetInstance<IWfiMorphBundleRepository>().AllInstances()
+							  where mb.MorphRA != null && IsLexicalPattern(mb.MorphRA.Form)
+							      && icuCollator.Compare(mb.Form.get_String(ws).Text, form) == 0
+								  && mb.MorphRA.MorphTypeRA != null
+								  && (mb.MorphRA.MorphTypeRA == mmt || mb.MorphRA.MorphTypeRA.IsAmbiguousWith(mmt))
+							  select mb.MorphRA).ToList();
 				}
+				if (morphs.Count == 1)
+					return morphs.First(); // special case: we can avoid the cost of figuring ReferringObjects.
+				IMoForm bestMorph = null;
+				var bestMorphCount = -1;
+				foreach (var mf in morphs)
+				{
+					int count = (from source in mf.ReferringObjects where source is IWfiMorphBundle select source).Count();
+					if (count > bestMorphCount)
+					{
+						bestMorphCount = count;
+						bestMorph = mf;
+					}
+				}
+				return bestMorph;
 			}
-			return bestMorph;
 		}
 
 		/// <summary>
@@ -3559,7 +3630,6 @@ namespace SIL.FieldWorks.IText
 			ChooseAnalysisHandler handler = (ChooseAnalysisHandler)sender;
 			AnalysisTree chosenAnalysis = handler.GetAnalysisTree();
 			CurrentAnalysisTree = chosenAnalysis;
-			bool fLookForDefaults = true;
 			if (CurrentAnalysisTree.Analysis == null)
 			{
 				// 'Use default analysis'. This can normally be achieved by loading data
@@ -3569,14 +3639,9 @@ namespace SIL.FieldWorks.IText
 				// displayed.)
 				CurrentAnalysisTree.Analysis = m_wordformOriginal;
 			}
-			else
-			{
-				// If the user chose an analysis we do not want to fill content in with defaults, use what they picked
-				fLookForDefaults = false;
-			}
 
 			// REVIEW: do we need to worry about changing the previous and next words?
-			LoadRealDataIntoSec(fLookForDefaults, false, false);
+			LoadRealDataIntoSec(!IsNewAnalysisSelected(handler), false, false);
 			OnUpdateEdited();
 			m_fShowAnalysisCombo = true; // we must want this icon, because we were previously showing it!
 			m_rootb.Reconstruct();
@@ -3595,6 +3660,12 @@ namespace SIL.FieldWorks.IText
 			}
 			if (!fMadeSelection)
 				MakeDefaultSelection();
+		}
+
+		private bool IsNewAnalysisSelected(ChooseAnalysisHandler handler)
+		{
+			// SetupCombo sets this tag for the New Analysis menu item
+			return handler.SelectedItem?.Tag == WfiWordformTags.kClassId;
 		}
 
 		// This just makes the combo visible again. It is more common to tell the ComboHandler
@@ -3777,7 +3848,7 @@ namespace SIL.FieldWorks.IText
 		/// <returns></returns>
 		public bool ShouldSave(bool fSaveGuess)
 		{
-			return m_caches.DataAccess.IsDirty() || fSaveGuess && UsingGuess;
+			return m_caches.DataAccess.IsDirty() || (fSaveGuess && UsingGuess);
 		}
 
 		/// <summary>
@@ -3861,10 +3932,10 @@ namespace SIL.FieldWorks.IText
 
 			m_dxdLayoutWidth = kForceLayout; // Don't try to draw until we get OnSize and do layout.
 			// For some reason, we don't always initialize our control size to be the same as our rootbox.
-			this.Margin = new Padding(3, 0, 3, 1);
+			Margin = new Padding(3, 0, 3, 1);
 			SyncControlSizeToRootBoxSize();
 			if (RightToLeftWritingSystem)
-				this.Anchor = AnchorStyles.Right | AnchorStyles.Top;
+				Anchor = AnchorStyles.Right | AnchorStyles.Top;
 
 			//TODO:
 			//ptmw->RegisterRootBox(qrootb);
@@ -4515,7 +4586,7 @@ namespace SIL.FieldWorks.IText
 				// not what we started with. We would save anyway as we switched views, so do it now.
 				var parent = Controller;
 				if (parent != null)
-					parent.UpdateRealFromSandbox(null, false, null);
+					parent.UpdateRealFromSandbox(null, false);
 				// This leaves the parent in a bad state, but maybe it would be good if all this is
 				// happening in some other parent, such as the words analysis view?
 				//m_hvoAnalysisGuess = GetRealAnalysis(false);

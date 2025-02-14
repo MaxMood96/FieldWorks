@@ -49,11 +49,14 @@ using SIL.LCModel.Utils;
 using SIL.PlatformUtilities;
 using SIL.Settings;
 using SIL.Utils;
+using SIL.Windows.Forms;
 using SIL.Windows.Forms.HtmlBrowser;
 using SIL.Windows.Forms.Keyboarding;
 using SIL.WritingSystems;
 using XCore;
 using ConfigurationException = SIL.Reporting.ConfigurationException;
+using PropertyTable = XCore.PropertyTable;
+using Process = System.Diagnostics.Process;
 
 namespace SIL.FieldWorks
 {
@@ -126,6 +129,11 @@ namespace SIL.FieldWorks
 		[DllImport("kernel32.dll")]
 		public static extern IntPtr LoadLibrary(string fileName);
 
+		const int DpiAwarenessContextUnaware = -1;
+
+		[DllImport("User32.dll")]
+		private static extern bool SetProcessDpiAwarenessContext(int dpiFlag);
+
 		/// ----------------------------------------------------------------------------
 		/// <summary>
 		/// The main entry point for the FieldWorks executable.
@@ -135,6 +143,7 @@ namespace SIL.FieldWorks
 		[STAThread]
 		static int Main(string[] rgArgs)
 		{
+			SetProcessDpiAwarenessContext(DpiAwarenessContextUnaware);
 			Thread.CurrentThread.Name = "Main thread";
 			Logger.Init(FwUtils.ksSuiteName);
 
@@ -143,7 +152,7 @@ namespace SIL.FieldWorks
 			// Add lib/{x86,x64} to PATH so that C++ code can find ICU dlls
 			var newPath = $"{pathName}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}";
 			Environment.SetEnvironmentVariable("PATH", newPath);
-			Icu.Wrapper.ConfineIcuVersions(54);
+			Icu.Wrapper.ConfineIcuVersions(70);
 			// ICU will be initialized further down (by calling FwUtils.InitializeIcu())
 			FwRegistryHelper.Initialize();
 
@@ -166,18 +175,22 @@ namespace SIL.FieldWorks
 
 				// Only the first FieldWorks process should notify the user of updates. If the user wants to open multiple projects before restarting
 				// for updates, skip the nagging dialogs.
-				var shouldCheckForUpdates = MiscUtils.IsWindows && !TryFindExistingProcess();
+				var shouldCheckForUpdates = Platform.IsWindows && !TryFindExistingProcess();
+				// FlexibleMessageBoxes for updates are shown before the main window is shown. Show them in the taskbar so they don't get lost.
+				FlexibleMessageBox.ShowInTaskbar = true;
+				FlexibleMessageBox.MaxWidthFactor = 0.4;
 
 				s_appSettings = new FwApplicationSettings();
 				s_appSettings.DeleteCorruptedSettingsFilesIfPresent();
 				s_appSettings.UpgradeIfNecessary();
 
-				if (s_appSettings.Update == null && MiscUtils.IsWindows)
+				if (s_appSettings.Update == null && Platform.IsWindows)
 				{
 					s_appSettings.Update = new UpdateSettings
 					{
-						Behavior = DialogResult.Yes == MessageBox.Show(
-								Properties.Resources.AutomaticUpdatesMessage, Properties.Resources.AutomaticUpdatesCaption, MessageBoxButtons.YesNo)
+						Behavior = DialogResult.Yes == FlexibleMessageBox.Show(
+								Properties.Resources.AutomaticUpdatesMessage, Properties.Resources.AutomaticUpdatesCaption, MessageBoxButtons.YesNo,
+								options: FlexibleMessageBoxOptions.AlwaysOnTop)
 							? UpdateSettings.Behaviors.Download
 							: UpdateSettings.Behaviors.DoNotCheck
 					};
@@ -205,13 +218,13 @@ namespace SIL.FieldWorks
 
 				s_appSettings.Save();
 #if DEBUG
-				const string analyticsKey = "ddkPyi0BMbFRyOC5PLuCKHVbJH2yI9Cu";
+				const string analyticsKey = "1ea57cd5f3a23080de9276b4c9a03fbd";
 				const bool sendFeedback = true;
 #else
-				const string analyticsKey = "ddkPyi0BMbFRyOC5PLuCKHVbJH2yI9Cu"; // TODO: replace with production key after initial testing period
+				const string analyticsKey = "624c80ea22952a1a70251b8e64844d79";
 				var sendFeedback = reportingSettings.OkToPingBasicUsageData;
 #endif
-				using (new Analytics(analyticsKey, new UserInfo(), sendFeedback))
+				using (new Analytics(analyticsKey, new UserInfo(), sendFeedback, clientType: DesktopAnalytics.ClientType.Mixpanel))
 				{
 
 					Logger.WriteEvent("Starting app");
@@ -223,7 +236,7 @@ namespace SIL.FieldWorks
 					// on this thread to prevent race conditions on shutdown.See TE-975
 					// See http://forums.microsoft.com/MSDN/ShowPost.aspx?PostID=911603&SiteID=1
 					// TODO-Linux: uses mono feature that is not implemented. What are the implications of this? Review.
-					if (MiscUtils.IsDotNet)
+					if (Platform.IsDotNet)
 						SystemEvents.InvokeOnEventsThread(new Action(DoNothing));
 
 					s_threadHelper = new ThreadHelper();
@@ -342,7 +355,7 @@ namespace SIL.FieldWorks
 					// Create a listener for this project for applications using FLEx as a LexicalProvider.
 					LexicalProviderManager.StartLexicalServiceProvider(s_projectId, s_cache);
 
-					if (MiscUtils.IsMono)
+					if (Platform.IsMono)
 						UglyHackForXkbIndicator();
 
 					if (shouldCheckForUpdates)
@@ -705,7 +718,7 @@ namespace SIL.FieldWorks
 					string thisProcessName = Assembly.GetExecutingAssembly().GetName().Name;
 					string thisSid = FwUtils.GetUserForProcess(thisProcess);
 					List<Process> processes = Process.GetProcessesByName(thisProcessName).ToList();
-					if (MiscUtils.IsUnix)
+					if (Platform.IsUnix)
 					{
 						processes.AddRange(Process.GetProcesses().Where(p => p.ProcessName.Contains("mono")
 							&& p.Modules.Cast<ProcessModule>().Any(m => m.ModuleName == (thisProcessName + ".exe"))));
@@ -1346,6 +1359,17 @@ namespace SIL.FieldWorks
 			if (TryCommandLineOption(projId, out projectOpenError))
 				return projId;
 
+			if (!string.IsNullOrEmpty(args.Password) && !string.IsNullOrEmpty(args.ProjectUri) && !string.IsNullOrEmpty(args.Username))
+			{
+				var projectFile = ObtainProjectMethod.ObtainProject(new Uri(args.ProjectUri), args.Database, args.Username, args.Password, args.RepoIdentifier, out _);
+				if (!string.IsNullOrEmpty(projectFile))
+				{
+					var projectName = Path.GetFileNameWithoutExtension(projectFile);
+					projId = new ProjectId(args.DatabaseType, projectName);
+					return projId;
+				}
+			}
+
 			// If this app hasn't been run before, ask user about opening sample DB.
 			var app = GetOrCreateApplication(args);
 			if (app.RegistrySettings.FirstTimeAppHasBeenRun)
@@ -1767,9 +1791,9 @@ namespace SIL.FieldWorks
 							}
 							catch (Exception e)
 							{
-								ErrorReport.AddProperty("FLEXBRIDGEDIR", Environment.GetEnvironmentVariable("FLEXBRIDGEDIR"));
-								ErrorReport.AddProperty("FLExBridgeFolder", FwDirectoryFinder.FlexBridgeFolder);
-								ErrorReport.ReportNonFatalException(e);
+								ErrorReporter.AddProperty("FLEXBRIDGEDIR", Environment.GetEnvironmentVariable("FLEXBRIDGEDIR"));
+								ErrorReporter.AddProperty("FLExBridgeFolder", FwDirectoryFinder.FlexBridgeFolder);
+								SafelyReportException(e, null, false);
 							}
 							break;
 						case WelcomeToFieldWorksDlg.ButtonPress.Import:
@@ -2031,7 +2055,7 @@ namespace SIL.FieldWorks
 			string projectPath = fwApp.Cache.ProjectId.Path;
 			string parentDirectory = Path.GetDirectoryName(fwApp.Cache.ProjectId.ProjectFolder);
 			string projectsDirectory = FwDirectoryFinder.ProjectsDirectory;
-				if (!MiscUtils.IsUnix)
+				if (!Platform.IsUnix)
 				{
 					parentDirectory = parentDirectory.ToLowerInvariant();
 					projectsDirectory = projectsDirectory.ToLowerInvariant();
@@ -2100,7 +2124,7 @@ namespace SIL.FieldWorks
 			}
 			string oldRoot = null;
 			string newRoot = null;
-			if (!MiscUtils.IsUnix)
+			if (!Platform.IsUnix)
 			{
 				oldPath = oldPath.ToLowerInvariant();
 				newPath = newPath.ToLowerInvariant();
@@ -2132,7 +2156,7 @@ namespace SIL.FieldWorks
 					case DriveType.Fixed:
 					case DriveType.Network:
 					case DriveType.Removable:
-						if (MiscUtils.IsUnix)
+						if (Platform.IsUnix)
 							driveMounts.Add(d.Name + (d.Name.EndsWith("/") ? "" : "/"));	// ensure terminated with a slash
 						else
 							driveMounts.Add(d.Name.ToLowerInvariant());		// Windows produces C:\ D:\ etc.
@@ -2261,7 +2285,7 @@ namespace SIL.FieldWorks
 				bldr.Append(Properties.Resources.ksYouCanTryToMoveProjects);
 				MessageBox.Show(bldr.ToString(), Properties.Resources.ksProblemsMovingProjects);
 			}
-			if (MiscUtils.IsUnix)
+			if (Platform.IsUnix)
 			{
 				if (projectPath.StartsWith(oldFolderForProjects))
 				{
@@ -3017,7 +3041,7 @@ namespace SIL.FieldWorks
 			}
 			catch (StartupException sue)
 			{
-				if (MiscUtils.IsUnix && sue.InnerException is UnauthorizedAccessException)
+				if (Platform.IsUnix && sue.InnerException is UnauthorizedAccessException)
 				{
 					// Tell Mono user he/she needs to logout and log back in
 					MessageBox.Show(ResourceHelper.GetResourceString("ksNeedToJoinFwGroup"));
@@ -3534,7 +3558,7 @@ namespace SIL.FieldWorks
 			ErrorReporter.AddProperty("MachineName", Environment.MachineName);
 			ErrorReporter.AddProperty("OSVersion", Environment.OSVersion.ToString());
 			ErrorReporter.AddProperty("OSRelease", ErrorReport.GetOperatingSystemLabel());
-			if (MiscUtils.IsUnix)
+			if (Platform.IsUnix)
 			{
 				var packageVersions = LinuxPackageUtils.FindInstalledPackages("fieldworks-applications*");
 				if (packageVersions.Count() > 0)
@@ -3562,7 +3586,6 @@ namespace SIL.FieldWorks
 			ErrorReporter.AddProperty("Culture", CultureInfo.CurrentCulture.ToString());
 			using (Bitmap bm = new Bitmap(10, 10))
 			{
-
 				ErrorReporter.AddProperty("ScreenDpiX", bm.HorizontalResolution.ToString());
 				ErrorReporter.AddProperty("ScreenDpiY", bm.VerticalResolution.ToString());
 			}
@@ -3604,15 +3627,22 @@ namespace SIL.FieldWorks
 				var fieldWorksFolder = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
 				var versionObj = Assembly.LoadFrom(Path.Combine(fieldWorksFolder ?? string.Empty, "Chorus.exe")).GetName().Version;
 				var version = $"{versionObj.Major}.{versionObj.Minor}.{versionObj.Build}";
-				LocalizationManager.Create(TranslationMemory.XLiff, CultureInfo.CurrentUICulture.TwoLetterISOLanguageName,
-					"Chorus", "Chorus", version, installedL10nBaseDir, userL10nBaseDir, null, "flex_localization@sil.org", "Chorus", "LibChorus");
-
-				var uiLanguageId = LocalizationManager.UILanguageId;
+				// First create localization manager for Chorus with english
+				LocalizationManager.Create("en",
+					"Chorus", "Chorus", version, installedL10nBaseDir, userL10nBaseDir, null, "flex_localization@sil.org", new [] { "Chorus", "LibChorus" });
+				// Now that we have one manager initialized check and see if the users UI language has
+				// localizations available
+				var uiCulture = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+				if (LocalizationManager.GetUILanguages(true).Any(lang => lang.TwoLetterISOLanguageName == uiCulture))
+				{
+					// If it is switch to using that instead of english
+					LocalizationManager.SetUILanguage(uiCulture, true);
+				}
 
 				versionObj = Assembly.GetAssembly(typeof(ErrorReport)).GetName().Version;
 				version = $"{versionObj.Major}.{versionObj.Minor}.{versionObj.Build}";
-				LocalizationManager.Create(TranslationMemory.XLiff, uiLanguageId, "Palaso", "Palaso", version, installedL10nBaseDir,
-					userL10nBaseDir, null, "flex_localization@sil.org", "SIL.Windows.Forms");
+				LocalizationManager.Create(LocalizationManager.UILanguageId, "Palaso", "Palaso", version, installedL10nBaseDir,
+					userL10nBaseDir, null, "flex_localization@sil.org", new [] { "SIL.Windows.Forms" });
 			}
 			catch (Exception e)
 			{

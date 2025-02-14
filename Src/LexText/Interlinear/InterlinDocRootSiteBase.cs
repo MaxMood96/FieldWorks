@@ -18,6 +18,7 @@ using SIL.LCModel.DomainServices;
 using SIL.LCModel.Infrastructure;
 using SIL.FieldWorks.FwCoreDlgControls;
 using XCore;
+using SIL.LCModel.Core.Text;
 
 namespace SIL.FieldWorks.IText
 {
@@ -586,6 +587,12 @@ namespace SIL.FieldWorks.IText
 			InterlinLineChoices curLineChoices, int ilineChoice)
 		{
 			var curSpec = curLineChoices.EnabledLineSpecs[ilineChoice];
+
+			// Do not add other writing systems for customs.
+			var mdc = (IFwMetaDataCacheManaged)m_cache.MetaDataCacheAccessor;
+			if (mdc.FieldExists(curSpec.Flid) && mdc.IsCustom(curSpec.Flid))
+				return;
+
 			var choices = GetWsComboItems(curSpec);
 			var curFlidDisplayedWss = curLineChoices.OtherEnabledWritingSystemsForFlid(curSpec.Flid, 0);
 			var curRealWs = GetRealWsFromSpec(curSpec);
@@ -736,9 +743,11 @@ namespace SIL.FieldWorks.IText
 
 			var flid = menuItem.Flid;
 			var newLineChoices = Vc.LineChoices.Clone() as InterlinLineChoices;
-			if (newLineChoices != null && ((IFwMetaDataCacheManaged)m_cache.MetaDataCacheAccessor).FieldExists(flid))
+			var mdc = (IFwMetaDataCacheManaged)m_cache.MetaDataCacheAccessor;
+			// Some virtual Ids such as -61 and 103 create standard items. so add those.
+			if (newLineChoices != null && (mdc.FieldExists(flid) || (flid <= ComplexConcPatternVc.kfragFeatureLine)))
 			{
-				newLineChoices.Add(flid);
+				newLineChoices.Add(flid, 0, true);
 				UpdateForNewLineChoices(newLineChoices);
 			}
 		}
@@ -910,7 +919,11 @@ namespace SIL.FieldWorks.IText
 		private void UpdateGuesses(HashSet<IWfiWordform> wordforms, bool fUpdateDisplayWhereNeeded)
 		{
 			// now update the guesses for the paragraphs.
-			var pdut = new ParaDataUpdateTracker(Vc.GuessServices, Vc.Decorator);
+			var pdut = new ParaDataUpdateTracker(Vc.GuessServices, Vc.GuessCache);
+			if (wordforms != null)
+				// The user may have changed the analyses for wordforms. (LT-21814)
+				foreach (var wordform in wordforms)
+					pdut.NoteChangedAnalysis(wordform.Hvo);
 			foreach (IStTxtPara para in RootStText.ParagraphsOS)
 				pdut.LoadAnalysisData(para, wordforms);
 			if (fUpdateDisplayWhereNeeded)
@@ -978,12 +991,6 @@ namespace SIL.FieldWorks.IText
 		/// </summary>
 		protected virtual void AddDecorator()
 		{
-			// by default, just use the InterinVc decorator.
-			if (m_rootb != null)
-			{
-				m_rootb.DataAccess = Vc.Decorator;
-			}
-
 		}
 
 		protected virtual void SetRootInternal(int hvo)
@@ -1038,10 +1045,27 @@ namespace SIL.FieldWorks.IText
 					break;
 				case WfiWordformTags.kflidAnalyses:
 					IWfiWordform wordform = m_cache.ServiceLocator.GetInstance<IWfiWordformRepository>().GetObject(hvo);
-					if (RootStText.UniqueWordforms().Contains(wordform))
+					var uniqueWordforms = RootStText.UniqueWordforms();
+					if (uniqueWordforms.Contains(wordform))
 					{
 						m_wordformsToUpdate.Add(wordform);
 						m_mediator.IdleQueue.Add(IdleQueuePriority.High, PostponedUpdateWordforms);
+					}
+					// Update uppercase versions of wordform.
+					// (When a lowercase wordform changes, it affects the best guess of its uppercase versions.)
+					var form = wordform.Form.VernacularDefaultWritingSystem;
+					var cf = new CaseFunctions(m_cache.ServiceLocator.WritingSystemManager.Get(form.get_WritingSystemAt(0)));
+					foreach (IWfiWordform ucWordform in uniqueWordforms)
+					{
+						var ucForm = ucWordform.Form.VernacularDefaultWritingSystem;
+						if (ucForm != form && ucForm != null && !string.IsNullOrEmpty(ucForm.Text))
+						{
+							if (cf.ToLower(ucForm.Text) == form.Text)
+							{
+								m_wordformsToUpdate.Add(ucWordform);
+								m_mediator.IdleQueue.Add(IdleQueuePriority.High, PostponedUpdateWordforms);
+							}
+						}
 					}
 					break;
 			}

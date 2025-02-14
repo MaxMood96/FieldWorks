@@ -1,19 +1,16 @@
-// Copyright (c) 2010-2013 SIL International
+// Copyright (c) 2010-2022 SIL International
 // This software is licensed under the LGPL, version 2.1 or later
 // (http://www.gnu.org/licenses/lgpl-2.1.html)
-//
-// File: RestoreProjectDlg.cs
-// Responsibility: TE Team
+
 using System;
 using System.IO;
-using System.Linq;
+using System.Threading;
 using System.Windows.Forms;
 using SIL.FieldWorks.Common.Controls.FileDialog;
 using SIL.FieldWorks.Common.FwUtils;
 using SIL.LCModel.DomainServices.BackupRestore;
 using SIL.FieldWorks.Resources;
 using SIL.Reporting;
-using SIL.LCModel.Utils;
 
 namespace SIL.FieldWorks.FwCoreDlgs.BackupRestore
 {
@@ -61,7 +58,6 @@ namespace SIL.FieldWorks.FwCoreDlgs.BackupRestore
 		private readonly RestoreProjectSettings m_settings;
 		private readonly string m_fmtUseOriginalName;
 		private OpenFileDialogAdapter m_openFileDlg;
-		private char[] m_invalidCharArray;
 
 		#endregion
 
@@ -130,13 +126,6 @@ namespace SIL.FieldWorks.FwCoreDlgs.BackupRestore
 			m_settings = new RestoreProjectSettings(FwDirectoryFinder.ProjectsDirectory);
 			m_txtOtherProjectName.KeyPress += m_txtOtherProjectName_KeyPress;
 			m_txtOtherProjectName.TextChanged += m_txtOtherProjectName_TextChanged;
-			GetIllegalProjectNameChars();
-		}
-
-		private void GetIllegalProjectNameChars()
-		{
-			m_invalidCharArray = MiscUtils.GetInvalidProjectNameChars(
-				MiscUtils.FilenameFilterStrength.kFilterProjName).ToCharArray();
 		}
 
 		#endregion
@@ -477,9 +466,10 @@ namespace SIL.FieldWorks.FwCoreDlgs.BackupRestore
 					backupDate, (m_lstVersions.Items.Count == 0));
 				if (backupFile != null)
 				{
-					ListViewItem newItem = new ListViewItem(new[]{backupDate.ToString(), backupFile.Comment});
-					newItem.Tag = backupFile;
-					m_lstVersions.Items.Add(newItem);
+					m_lstVersions.Items.Add(new ListViewItem(new[] { backupDate.ToString(Thread.CurrentThread.CurrentUICulture), backupFile.Comment })
+					{
+						Tag = backupFile
+					});
 				}
 			}
 

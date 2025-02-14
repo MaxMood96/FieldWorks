@@ -49,6 +49,24 @@ namespace SIL.FieldWorks.Common.Controls
 			insideProperty = 2,
 			insideLink = 3,
 		};
+
+		/// <summary>
+		/// The level of the ICU rule that defined a digraph.
+		/// </summary>
+		public enum CollationLevel
+		{
+			/// <summary>
+			/// Either secondary or tertiary level. It would be extra work to determine
+			/// if it is secondary or tertiary and it's currently not needed.
+			/// </summary>
+			notPrimary = 0,
+
+			/// <summary>
+			/// First level
+			/// </summary>
+			primary = 1
+		}
+
 		private CurrentContext m_cc = CurrentContext.unknown;
 		private string m_sTimeField = null;
 
@@ -58,7 +76,7 @@ namespace SIL.FieldWorks.Common.Controls
 		/// <summary>
 		/// Map from a writing system to its set of digraphs (or multigraphs) used in sorting.
 		/// </summary>
-		Dictionary<string, ISet<string>> m_mapWsDigraphs = new Dictionary<string, ISet<string>>();
+		Dictionary<string, Dictionary<string, CollationLevel>> m_mapWsDigraphs = new Dictionary<string, Dictionary<string, CollationLevel>>();
 		/// <summary>
 		/// Map from a writing system to its map of equivalent graphs/multigraphs used in sorting.
 		/// </summary>
@@ -68,8 +86,8 @@ namespace SIL.FieldWorks.Common.Controls
 		/// </summary>
 		Dictionary<string, ISet<string>> m_mapWsIgnorables = new Dictionary<string, ISet<string>>();
 
-		private string m_sWsVern = null;
-		private string m_sWsRevIdx = null;
+		private CoreWritingSystemDefinition m_wsVern;
+		private CoreWritingSystemDefinition m_wsRevIdx;
 		Dictionary<int, string> m_dictCustomUserLabels = new Dictionary<int, string>();
 		string m_sActiveParaStyle;
 		Dictionary<XmlNode, string> m_mapXnToCssClass = new Dictionary<XmlNode, string>();
@@ -561,27 +579,27 @@ namespace SIL.FieldWorks.Common.Controls
 			string sEntry = StringServices.ShortName1Static(m_cache.ServiceLocator.GetInstance<ILexEntryRepository>().GetObject(hvoItem));
 			if (string.IsNullOrEmpty(sEntry))
 				return;
-			if (m_sWsVern == null)
-				m_sWsVern = m_cache.ServiceLocator.WritingSystems.DefaultVernacularWritingSystem.Id;
-			WriteLetterHeadIfNeeded(sEntry, m_sWsVern);
+			if (m_wsVern == null)
+				m_wsVern = m_cache.ServiceLocator.WritingSystems.DefaultVernacularWritingSystem;
+			WriteLetterHeadIfNeeded(sEntry, m_wsVern);
 		}
 
-		private void WriteLetterHeadIfNeeded(string sEntry, string sWs)
+		private void WriteLetterHeadIfNeeded(string sEntry, CoreWritingSystemDefinition ws)
 		{
-			string sLower = GetLeadChar(CustomIcu.GetIcuNormalizer(FwNormalizationMode.knmNFD).Normalize(sEntry), sWs);
-			string sTitle = Icu.UnicodeString.ToTitle(sLower, sWs);
+			string sLower = GetLeadChar(CustomIcu.GetIcuNormalizer(FwNormalizationMode.knmNFD).Normalize(sEntry), ws.Id);
+			string sTitle = new CaseFunctions(ws).ToTitle(sLower);
 			if (sTitle != m_schCurrent)
 			{
 				if (m_schCurrent.Length > 0)
 					m_writer.WriteLine("</div>");	// for letData
 				m_writer.WriteLine("<div class=\"letHead\">");
 				var sb = new StringBuilder();
-				if (!String.IsNullOrEmpty(sTitle) && sTitle != sLower)
+				if (!string.IsNullOrEmpty(sTitle) && sTitle != sLower)
 				{
 					sb.Append(sTitle.Normalize());
 					sb.Append(' ');
 				}
-				if (!String.IsNullOrEmpty(sLower))
+				if (!string.IsNullOrEmpty(sLower))
 					sb.Append(sLower.Normalize());
 				m_writer.WriteLine("<div class=\"letter\">{0}</div>", XmlUtils.MakeSafeXml(sb.ToString()));
 				m_writer.WriteLine("</div>");
@@ -628,7 +646,7 @@ namespace SIL.FieldWorks.Common.Controls
 		/// <param name="cache"></param>
 		/// <returns>The character headwordNFD is being sorted under in the dictionary.</returns>
 		public static string GetLeadChar(string headwordNFD, string sWs,
-													Dictionary<string, ISet<string>> wsDigraphMap,
+													Dictionary<string, Dictionary<string, CollationLevel>> wsDigraphMap,
 													Dictionary<string, Dictionary<string, string>> wsCharEquivalentMap,
 													Dictionary<string, ISet<string>> wsIgnorableCharMap,
 													Collator sortKeyCollator,
@@ -636,11 +654,13 @@ namespace SIL.FieldWorks.Common.Controls
 		{
 			if (string.IsNullOrEmpty(headwordNFD))
 				return "";
-			var headwordLC = Icu.UnicodeString.ToLower(headwordNFD, sWs);
+			var ws = cache.ServiceLocator.WritingSystemManager.Get(sWs);
+			var cf = new CaseFunctions(ws);
+			var headwordLC = cf.ToLower(headwordNFD);
 			Dictionary<string, string> mapChars;
 			// List of characters to ignore in creating letter heads.
 			ISet<string> chIgnoreList;
-			ISet<string> sortChars = GetDigraphs(sWs, wsDigraphMap, wsCharEquivalentMap, wsIgnorableCharMap, cache, out mapChars, out chIgnoreList);
+			ISet<string> sortChars = GetDigraphs(ws, wsDigraphMap, wsCharEquivalentMap, wsIgnorableCharMap, out mapChars, out chIgnoreList);
 			if (chIgnoreList != null && chIgnoreList.Any()) // this list was built in GetDigraphs()
 			{
 				// sort the ignorable set with the longest first to avoid edge case where one ignorable
@@ -661,42 +681,58 @@ namespace SIL.FieldWorks.Common.Controls
 			}
 			if (string.IsNullOrEmpty(headwordLC))
 				return ""; // check again
-			var headwordBeforeEquivalence = headwordLC;
-			bool changed;
-			var map = mapChars;
-			do  // This loop replaces each occurrence of equivalent characters in headwordLC
-				// with the representative of its equivalence class
-			{   // replace subsorting chars by their main sort char. a << 'a << ^a, etc. are replaced by a.
-				foreach (string key in map.Keys)
-					headwordLC = headwordLC.Replace(key, map[key]);
-				changed = headwordBeforeEquivalence != headwordLC;
-				if (headwordLC.Length > headwordBeforeEquivalence.Length && map == mapChars)
-				{   // Rules like a -> a' repeat infinitely! To truncate this eliminate any rule whose output contains an input.
-					map = new Dictionary<string, string>(mapChars);
-					foreach (var kvp in mapChars)
-					{
-						foreach (var key1 in mapChars.Keys)
+
+			// If the headword begins with a primary digraph then use that as the first character without doing any replacement.
+			string firstChar = null;
+			foreach (var primaryDigraph in wsDigraphMap[ws.Id].Where(digraph => digraph.Value == CollationLevel.primary))
+			{
+				if (headwordLC.StartsWith(cf.ToLower(primaryDigraph.Key)))
+					firstChar = cf.ToLower(primaryDigraph.Key);
+			}
+
+			// Replace equivalent characters.
+			if (firstChar == null)
+			{
+				var headwordBeforeEquivalence = headwordLC;
+				bool changed;
+				var map = mapChars;
+				do // This loop replaces each occurrence of equivalent characters in headwordLC
+					// with the representative of its equivalence class
+				{   // replace subsorting chars by their main sort char. a << 'a << ^a, etc. are replaced by a.
+					foreach (string key in map.Keys)
+						headwordLC = headwordLC.Replace(key, map[key]);
+					changed = headwordBeforeEquivalence != headwordLC;
+					if (headwordLC.Length > headwordBeforeEquivalence.Length && map == mapChars)
+					{   // Rules like a -> a' repeat infinitely! To truncate this eliminate any rule whose output contains an input.
+						map = new Dictionary<string, string>(mapChars);
+						foreach (var kvp in mapChars)
 						{
-							if (kvp.Value.Contains(key1))
+							foreach (var key1 in mapChars.Keys)
 							{
-								map.Remove(kvp.Key);
-								break;
+								if (kvp.Value.Contains(key1))
+								{
+									map.Remove(kvp.Key);
+									break;
+								}
 							}
 						}
 					}
-				}
-				headwordBeforeEquivalence = headwordLC;
-			} while (changed);
-			var cnt = GetLetterLengthAt(headwordLC, 0);
-			var firstChar = headwordLC.Substring(0, cnt);
-			foreach (var sortChar in sortChars)
-			{
-				if (headwordLC.StartsWith(sortChar))
+
+					headwordBeforeEquivalence = headwordLC;
+				} while (changed);
+
+				var cnt = GetLetterLengthAt(headwordLC, 0);
+				firstChar = headwordLC.Substring(0, cnt);
+				foreach (var sortChar in sortChars)
 				{
-					if (firstChar.Length < sortChar.Length)
-						firstChar = sortChar;
+					if (headwordLC.StartsWith(sortChar))
+					{
+						if (firstChar.Length < sortChar.Length)
+							firstChar = sortChar;
+					}
 				}
 			}
+
 			// We don't want firstChar for an ignored first character or digraph.
 			if (sortKeyCollator != null)
 			{
@@ -721,13 +757,14 @@ namespace SIL.FieldWorks.Common.Controls
 		/// Get the set of significant digraphs (multigraphs) for the writing system. At the
 		/// moment, these are derived from ICU sorting rules associated with the writing system.
 		/// </summary>
-		/// <param name="sWs">Name of writing system</param>
+		/// <param name="ws"/>
 		/// <param name="mapChars">Set of character equivalences</param>
 		/// <param name="chIgnoreSet">Set of characters to ignore</param>
 		/// <returns></returns>
-		internal ISet<string> GetDigraphs(string sWs, out Dictionary<string, string> mapChars, out ISet<string> chIgnoreSet)
+		internal ISet<string> GetDigraphs(CoreWritingSystemDefinition ws,
+			out Dictionary<string, string> mapChars, out ISet<string> chIgnoreSet)
 		{
-			return GetDigraphs(sWs, m_mapWsDigraphs, m_mapWsMapChars, m_mapWsIgnorables, m_cache, out mapChars,
+			return GetDigraphs(ws, m_mapWsDigraphs, m_mapWsMapChars, m_mapWsIgnorables, out mapChars,
 									 out chIgnoreSet);
 		}
 
@@ -735,58 +772,55 @@ namespace SIL.FieldWorks.Common.Controls
 		/// Get the set of significant digraphs (multigraphs) for the writing system. At the
 		/// moment, these are derived from ICU sorting rules associated with the writing system.
 		/// </summary>
-		/// <param name="sWs">Name of writing system</param>
+		/// <param name="ws"/>
 		/// <param name="wsDigraphMap">Map of writing system to digraphs already discovered for that ws</param>
 		/// <param name="wsCharEquivalentMap">Map of writing system to already discovered character equivalences for that ws</param>
 		/// <param name="wsIgnorableCharMap">Map of writing system to ignorable characters for that ws </param>
-		/// <param name="cache"></param>
 		/// <param name="mapChars">Set of character equivalences</param>
 		/// <param name="chIgnoreSet">Set of characters to ignore</param>
 		/// <returns></returns>
-		internal static ISet<string> GetDigraphs(string sWs,
-			Dictionary<string, ISet<string>> wsDigraphMap,
+		internal static ISet<string> GetDigraphs(CoreWritingSystemDefinition ws,
+			Dictionary<string, Dictionary<string, CollationLevel>> wsDigraphMap,
 			Dictionary<string, Dictionary<string, string>> wsCharEquivalentMap,
 			Dictionary<string, ISet<string>> wsIgnorableCharMap,
-			LcmCache cache,
 			out Dictionary<string, string> mapChars,
 			out ISet<string> chIgnoreSet)
 		{
+			var sWs = ws.Id;
 			// Collect the digraph and character equivalence maps and the ignorable character set
 			// the first time through. There after, these maps and lists are just retrieved.
 			chIgnoreSet = new HashSet<string>(); // if ignorable chars get through they can become letter heads! LT-11172
-			ISet<string> digraphs;
+			Dictionary<string, CollationLevel> digraphs;
 			// Are the maps and ignorables already setup for the taking?
 			if (wsDigraphMap.TryGetValue(sWs, out digraphs))
 			{   // knows about ws, so already knows character equivalence classes
 				mapChars = wsCharEquivalentMap[sWs];
 				chIgnoreSet = wsIgnorableCharMap[sWs];
-				return digraphs;
+				return new HashSet<string>(digraphs.Keys);
 			}
-			digraphs = new HashSet<string>();
+			digraphs = new Dictionary<string, CollationLevel>();
 			mapChars = new Dictionary<string, string>();
-			CoreWritingSystemDefinition ws = cache.ServiceLocator.WritingSystemManager.Get(sWs);
 
 			wsDigraphMap[sWs] = digraphs;
 
-			var simpleCollation = ws.DefaultCollation as SimpleRulesCollationDefinition;
-			if (simpleCollation != null)
+			switch (ws.DefaultCollation)
 			{
-				if (!string.IsNullOrEmpty(simpleCollation.SimpleRules))
+				case SimpleRulesCollationDefinition simpleCollation:
 				{
-					string rules = simpleCollation.SimpleRules.Replace(" ", "=");
-					string[] primaryParts = rules.Split(new[] {Environment.NewLine}, StringSplitOptions.RemoveEmptyEntries);
-					foreach (var part in primaryParts)
+					if (!string.IsNullOrEmpty(simpleCollation.SimpleRules))
 					{
-						BuildDigraphSet(part, sWs, wsDigraphMap);
-						MapRuleCharsToPrimary(part, sWs, wsCharEquivalentMap);
+						string rules = simpleCollation.SimpleRules.Replace(" ", "=");
+						string[] primaryParts = rules.Split(new[] {Environment.NewLine}, StringSplitOptions.RemoveEmptyEntries);
+						foreach (var part in primaryParts)
+						{
+							BuildDigraphSet(part, ws, wsDigraphMap);
+							MapRuleCharsToPrimary(part, sWs, wsCharEquivalentMap);
+						}
 					}
+					break;
 				}
-			}
-			else
-			{
 				// is this a custom ICU collation?
-				var icuCollation = ws.DefaultCollation as IcuRulesCollationDefinition;
-				if (icuCollation != null && !string.IsNullOrEmpty(icuCollation.IcuRules))
+				case IcuRulesCollationDefinition icuCollation when !string.IsNullOrEmpty(icuCollation.IcuRules):
 				{
 					// prime with empty ws in case all the rules affect only the ignore set
 					wsCharEquivalentMap[sWs] = mapChars;
@@ -804,7 +838,7 @@ namespace SIL.FieldWorks.Common.Controls
 						{
 							rule = ProcessAdvancedSyntacticalElements(chIgnoreSet, rule);
 						}
-						if (String.IsNullOrEmpty(rule.Trim()))
+						if (string.IsNullOrEmpty(rule.Trim()))
 							continue;
 						rule = rule.Replace("<<<", "=");
 						rule = rule.Replace("<<", "=");
@@ -829,16 +863,17 @@ namespace SIL.FieldWorks.Common.Controls
 
 						// "&N<ng<<<Ng<ny<<<Ny" => "&N<ng=Ng<ny=Ny"
 						// "&N<�<<<�" => "&N<�=�"
-						// There are other issues we are not handling proplerly such as the next line
+						// There are other issues we are not handling properly such as the next line
 						// &N<\u006e\u0067
 						var primaryParts = rule.Split('<');
 						foreach (var part in primaryParts)
 						{
 							if (rule.Contains("<"))
-								BuildDigraphSet(part, sWs, wsDigraphMap);
+								BuildDigraphSet(part, ws, wsDigraphMap);
 							MapRuleCharsToPrimary(part, sWs, wsCharEquivalentMap);
 						}
 					}
+					break;
 				}
 			}
 
@@ -848,7 +883,7 @@ namespace SIL.FieldWorks.Common.Controls
 				wsCharEquivalentMap[sWs] = mapChars = new Dictionary<string, string>();
 
 			wsIgnorableCharMap.Add(sWs, chIgnoreSet);
-			return digraphs;
+			return new HashSet<string>(digraphs.Keys);
 		}
 
 		private static string ProcessAdvancedSyntacticalElements(ISet<string> chIgnoreSet, string rule)
@@ -915,29 +950,34 @@ namespace SIL.FieldWorks.Common.Controls
 			}
 		}
 
-		private static void BuildDigraphSet(string part, string ws, Dictionary<string, ISet<string>> wsDigraphsMap)
+		private static void BuildDigraphSet(string part, CoreWritingSystemDefinition ws, Dictionary<string, Dictionary<string, CollationLevel>> wsDigraphsMap)
 		{
+			var sWs = ws.Id;
+			var cf = new CaseFunctions(ws);
+			var collationLevel = CollationLevel.primary;
 			foreach (var character in part.Split('='))
 			{
 				var sGraph = character.Trim();
-				if (String.IsNullOrEmpty(sGraph))
+				if (string.IsNullOrEmpty(sGraph))
 					continue;
 				sGraph = CustomIcu.GetIcuNormalizer(FwNormalizationMode.knmNFD).Normalize(sGraph);
 				if (sGraph.Length > 1)
 				{
-					sGraph = Icu.UnicodeString.ToLower(sGraph, ws);
-					if (!wsDigraphsMap.ContainsKey(ws))
+					sGraph = cf.ToLower(sGraph);
+					if (!wsDigraphsMap.ContainsKey(sWs))
 					{
-						wsDigraphsMap.Add(ws, new HashSet<string> { sGraph });
+						wsDigraphsMap.Add(sWs, new Dictionary<string, CollationLevel> { {sGraph, collationLevel } });
 					}
 					else
 					{
-						if (!wsDigraphsMap[ws].Contains(sGraph))
+						if (!wsDigraphsMap[sWs].Keys.Contains(sGraph))
 						{
-							wsDigraphsMap[ws].Add(sGraph);
+							wsDigraphsMap[sWs].Add(sGraph, collationLevel);
 						}
 					}
 				}
+
+				collationLevel = CollationLevel.notPrimary;
 			}
 		}
 
@@ -977,14 +1017,13 @@ namespace SIL.FieldWorks.Common.Controls
 
 			var entry = (IReversalIndexEntry) obj;
 			var idx = (IReversalIndex) objOwner;
-			CoreWritingSystemDefinition ws = m_cache.ServiceLocator.WritingSystemManager.Get(idx.WritingSystem);
-			string sEntry = entry.ReversalForm.get_String(ws.Handle).Text;
+			if (m_wsRevIdx == null)
+				m_wsRevIdx = m_cache.ServiceLocator.WritingSystemManager.Get(idx.WritingSystem);
+			string sEntry = entry.ReversalForm.get_String(m_wsRevIdx.Handle).Text;
 			if (string.IsNullOrEmpty(sEntry))
 				return;
 
-			if (string.IsNullOrEmpty(m_sWsRevIdx))
-				m_sWsRevIdx = ws.Id;
-			WriteLetterHeadIfNeeded(sEntry, m_sWsRevIdx);
+			WriteLetterHeadIfNeeded(sEntry, m_wsRevIdx);
 		}
 
 		private void WriteClassEndTag(CurrentContext ccOld)

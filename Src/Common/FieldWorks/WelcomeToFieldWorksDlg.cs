@@ -10,6 +10,7 @@ using SIL.FieldWorks.Common.FwUtils;
 using SIL.FieldWorks.LexText.Controls;
 using SIL.Reporting;
 using SIL.LCModel.Utils;
+using SIL.PlatformUtilities;
 
 namespace SIL.FieldWorks
 {
@@ -89,7 +90,7 @@ namespace SIL.FieldWorks
 			}
 
 			m_helpTopicProvider = helpTopicProvider;
-			var helpProvider = new HelpProvider
+			var helpProvider = new FlexHelpProvider
 			{
 				HelpNamespace = FwDirectoryFinder.CodeDirectory + m_helpTopicProvider.GetHelpString("UserHelpFile")
 			};
@@ -201,7 +202,7 @@ namespace SIL.FieldWorks
 			// make sure that the dialog comes up visible and activated.
 			Activate();
 
-			if (MiscUtils.IsUnix)
+			if (Platform.IsUnix)
 				ReLayoutCorrectly();
 		}
 

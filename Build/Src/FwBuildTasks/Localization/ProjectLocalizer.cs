@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2020 SIL International
+// Copyright (c) 2015-2023 SIL International
 // This software is licensed under the LGPL, version 2.1 or later
 // (http://www.gnu.org/licenses/lgpl-2.1.html)
 
@@ -56,7 +56,7 @@ namespace SIL.FieldWorks.Build.Tasks.Localization
 		{
 			Options.LogMessage(MessageImportance.Low, "Processing project {0}", ProjectFolder);
 
-			var resourceInfo = GetResourceInfo(ProjectFolder);
+			var resourceInfo = GetResourceInfo(ProjectFolder, Options);
 			if (resourceInfo == null || resourceInfo.ResXFiles.Count == 0)
 				return; // nothing to localize; in particular we should NOT call al with no inputs.
 
@@ -67,21 +67,41 @@ namespace SIL.FieldWorks.Build.Tasks.Localization
 				CreateResourceAssemblies(resourceInfo);
 		}
 
-		private static ResourceInfo GetResourceInfo(string projectFolder)
+		private static ResourceInfo GetResourceInfo(string projectFolder, ProjectLocalizerOptions options)
 		{
-			var projectFile = Directory.GetFiles(projectFolder, "*.csproj").First(); // called only if there is exactly one.
-			var doc = XDocument.Load(projectFile);
-			XNamespace ns = @"http://schemas.microsoft.com/developer/msbuild/2003";
+			var projectFile = Directory.GetFiles(projectFolder, "*.csproj").FirstOrDefault(); // called only if there is exactly one.
+			if (projectFile == null)
+			{
+				options.LogError($"Tried to process {projectFolder} as a project but no .csproj file was found.");
+				return null;
+			}
 
+			var assemblyName = Path.GetFileNameWithoutExtension(projectFile);
+			var doc = XDocument.Load(projectFile);
 			var resxFiles = GetResXFiles(projectFolder);
 			if (resxFiles.Count == 0)
 				return null;
-
+			var rootNamespaceValue = doc.Descendants()
+				.FirstOrDefault(elem => elem.Name.LocalName == "RootNamespace");
+			var assemblyNameElement =
+				doc.Descendants().FirstOrDefault(elem => elem.Name.LocalName == "AssemblyName");
+			if (rootNamespaceValue == null)
+			{
+				var elements = doc.Descendants().Select(elem => elem.Name.LocalName);
+				options.LogError($"Can't find RootNamespace in {string.Concat(",", elements)}");
+				return null;
+			}
+			if (assemblyNameElement != null)
+			{
+				// The new .csproj format assumes that this is the same as the project name
+				// and specifies it only where it is different
+				assemblyName = assemblyNameElement.Value;
+			}
 			var resourceInfo = new ResourceInfo {
 				ProjectFolder = projectFolder,
 				ResXFiles = resxFiles,
-				RootNameSpace = doc.Descendants(ns + "RootNamespace").First().Value,
-				AssemblyName = doc.Descendants(ns + "AssemblyName").First().Value
+				RootNameSpace = rootNamespaceValue.Value,
+				AssemblyName = assemblyName
 			};
 
 			return resourceInfo;
@@ -121,6 +141,7 @@ namespace SIL.FieldWorks.Build.Tasks.Localization
 				{
 					File.Copy(resxFile, localizedResxPath, overwrite: true);
 					Options.LogMessage(MessageImportance.Normal, $"copying original English resx to {localizedResxPath}");
+					Options.LogMessage(MessageImportance.Low, $"\t(could not find {localizedResxSourcePath})");
 				}
 			}
 		}
@@ -141,7 +162,7 @@ namespace SIL.FieldWorks.Build.Tasks.Localization
 			return Path.Combine(outputFolder, fileName);
 		}
 
-		private string GetLocalizedResxSourcePath(string resxPath)
+		internal string GetLocalizedResxSourcePath(string resxPath)
 		{
 			var resxFileName = Path.GetFileNameWithoutExtension(resxPath);
 			// ReSharper disable once PossibleNullReferenceException
@@ -152,10 +173,6 @@ namespace SIL.FieldWorks.Build.Tasks.Localization
 		}
 
 		/// <returns><c>true</c> if the given ResX file has errors in string.Format variables</returns>
-		/// <remarks>
-		/// ENHANCE (Hasso) 2020.06: tolerate extra localized elements?
-		/// This would allow all GitHub branches to be build from the same branch in Crowdin.
-		/// </remarks>
 		private bool CheckResXForErrors(string resxPath, string originalResxPath)
 		{
 			var originalElements = LocalizableElements(originalResxPath, out var comments);
@@ -168,12 +185,7 @@ namespace SIL.FieldWorks.Build.Tasks.Localization
 			//	hasErrors = true;
 			//}
 
-			if (hasErrors)
-			{
-				return true;
-			}
-
-			//if (originalElements.Count != localizedElements.Count)
+			//if (hasErrors || originalElements.Count != localizedElements.Count)
 			//{
 			//	foreach (var key in originalElements.Keys.Where(key => !localizedElements.ContainsKey(key)))
 			//	{
@@ -182,7 +194,9 @@ namespace SIL.FieldWorks.Build.Tasks.Localization
 			//	}
 			//}
 
-			foreach (var _ in localizedElements.Where(elt => Options.HasErrors(resxPath, elt.Value, originalElements[elt.Key], comments[elt.Key])))
+			foreach (var _ in localizedElements.Where(elt => Options.HasErrors(resxPath, elt.Value,
+				originalElements.TryGetValue(elt.Key, out var origElt) ? origElt : null,
+				comments.TryGetValue(elt.Key, out var origComment) ? origComment : null)))
 			{
 				hasErrors = true;
 			}

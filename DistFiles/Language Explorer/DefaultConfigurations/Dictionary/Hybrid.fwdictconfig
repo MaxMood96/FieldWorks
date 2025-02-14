@@ -3,7 +3,7 @@
  xsi:noNamespaceSchemaLocation="../../Configuration/DictionaryConfiguration.xsd"
  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
  name="Hybrid (complex forms as main entries and mini subentries)"
- version="22" lastModified="2018-09-27"
+ version="25" lastModified="2023-07-13"
  allPublications="true" isRootBased="false">
 	<ConfigurationItem name="Main Entry" isEnabled="true" style="Dictionary-Normal" styleType="paragraph" field="LexEntry" cssClassNameOverride="entry">
 		<ListTypeOptions list="complex">
@@ -263,6 +263,11 @@
 						<Option id="analysis" isEnabled="true" />
 					</WritingSystemOptions>
 				</ConfigurationItem>
+			</ConfigurationItem>
+			<ConfigurationItem name="Exemplar" isEnabled="false" before="" after=" " field="Exemplar">
+				<WritingSystemOptions writingSystemType="vernacular" displayWSAbreviation="false">
+					<Option id="vernacular" isEnabled="true" />
+				</WritingSystemOptions>
 			</ConfigurationItem>
 			<ConfigurationItem name="Definition (or Gloss)" isEnabled="true" between=" " after="" field="DefinitionOrGloss">
 				<WritingSystemOptions writingSystemType="analysis" displayWSAbreviation="false">
@@ -1104,16 +1109,21 @@
 			</ComplexFormOptions>
 			<ReferenceItem>MainEntrySubentries</ReferenceItem>
 		</ConfigurationItem>
-		<ConfigurationItem name="Pictures" isEnabled="true" style="Dictionary-Pictures" before="" between="  " after="" field="PicturesOfSenses">
+		<ConfigurationItem name="Pictures" isEnabled="true" style="Dictionary-Pictures" before="" between="" after="" field="PicturesOfSenses">
 			<PictureOptions minimumHeight="0" maximumHeight="1" minimumWidth="0" maximumWidth="0" pictureLocation="right" stackPictures="false" />
 			<ConfigurationItem name="Thumbnail" isEnabled="true" before=" " between=" " after="" field="PictureFileRA" cssClassNameOverride="thumbnail" />
+			<ConfigurationItem name="Caption (or Headword)" between=" " isEnabled="false" field="CaptionOrHeadword">
+				<WritingSystemOptions writingSystemType="both" displayWSAbreviation="false">
+					<Option id="vernacular" isEnabled="true"/>
+				</WritingSystemOptions>
+			</ConfigurationItem>
 			<ConfigurationItem name="Caption" isEnabled="true" before="" between=" " after="" field="Caption">
 				<WritingSystemOptions writingSystemType="both" displayWSAbreviation="false">
 					<Option id="vernacular" isEnabled="true" />
 				</WritingSystemOptions>
 			</ConfigurationItem>
 			<!-- Using cssClassNameOverride="headword" to show the Configure Headword Numbers button -->
-			<ConfigurationItem name="Headword" between=" " after="" style="Dictionary-Headword" isEnabled="false" field="Owner" subField="OwnerOutlineName" cssClassNameOverride="headword">
+			<ConfigurationItem name="Headword" between=" " after="" style="Dictionary-Headword" isEnabled="false" field="Owner" subField="MLOwnerOutlineName" cssClassNameOverride="headword">
 				<WritingSystemOptions writingSystemType="vernacular" displayWSAbreviation="false">
 					<Option id="vernacular" isEnabled="true"/>
 				</WritingSystemOptions>
@@ -1123,6 +1133,8 @@
 					<Option id="analysis" isEnabled="true"/>
 				</WritingSystemOptions>
 			</ConfigurationItem>
+			<ConfigurationItem name="Creator" before=" " after="," isEnabled="true" field="@extension:SIL.FieldWorks.XWorks.DictConfigModelExt.Creator" cssClassNameOverride="creator" />
+			<ConfigurationItem name="Copyright &amp; License" before=" " after="" isEnabled="true" field="@extension:SIL.FieldWorks.XWorks.DictConfigModelExt.CopyrightAndLicense" cssClassNameOverride="license" />
 		</ConfigurationItem>
 	</ConfigurationItem>
 	<ConfigurationItem name="Minor Entry (Variants)" isEnabled="true" style="Dictionary-Minor" styleType="paragraph" field="LexEntry" cssClassNameOverride="minorentryvariant">
@@ -1374,6 +1386,11 @@
 						<Option id="analysis" isEnabled="true" />
 					</WritingSystemOptions>
 				</ConfigurationItem>
+			</ConfigurationItem>
+			<ConfigurationItem name="Exemplar" isEnabled="false" before="" after=" " field="Exemplar">
+				<WritingSystemOptions writingSystemType="vernacular" displayWSAbreviation="false">
+					<Option id="vernacular" isEnabled="true" />
+				</WritingSystemOptions>
 			</ConfigurationItem>
 			<ConfigurationItem name="Definition (or Gloss)" isEnabled="true" between=" " after="" field="DefinitionOrGloss">
 				<WritingSystemOptions writingSystemType="analysis" displayWSAbreviation="false">
@@ -2096,16 +2113,21 @@
 		</ConfigurationItem>
 		<ConfigurationItem name="Date Created" isEnabled="false" before="  Created on: " after="" field="DateCreated" />
 		<ConfigurationItem name="Date Modified" isEnabled="false" before=" Modified on: " after="" field="DateModified" />
-		<ConfigurationItem name="Pictures" between="  " after="" style="Dictionary-Pictures" isEnabled="true" field="PicturesOfSenses" cssClassNameOverride="pictures">
+		<ConfigurationItem name="Pictures" between="" after="" style="Dictionary-Pictures" isEnabled="true" field="PicturesOfSenses" cssClassNameOverride="pictures">
 			<PictureOptions minimumHeight="0" maximumHeight="1" maximumWidth="0" minimumWidth="0" pictureLocation="right" stackPictures="false" />
 			<ConfigurationItem name="Thumbnail" after="" isEnabled="true" field="PictureFileRA" cssClassNameOverride="thumbnail"/>
+			<ConfigurationItem name="Caption (or Headword)" between=" " isEnabled="false" field="CaptionOrHeadword">
+				<WritingSystemOptions writingSystemType="both" displayWSAbreviation="false">
+					<Option id="vernacular" isEnabled="true"/>
+				</WritingSystemOptions>
+			</ConfigurationItem>
 			<ConfigurationItem name="Caption" between=" " isEnabled="false" field="Caption">
 				<WritingSystemOptions writingSystemType="both" displayWSAbreviation="false">
 					<Option id="vernacular" isEnabled="true"/>
 				</WritingSystemOptions>
 			</ConfigurationItem>
 			<!-- Using cssClassNameOverride="headword" to show the Configure Headword Numbers button -->
-			<ConfigurationItem name="Headword" between=" " after="" style="Dictionary-Headword" isEnabled="true" field="Owner" subField="OwnerOutlineName" cssClassNameOverride="headword">
+			<ConfigurationItem name="Headword" between=" " after="" style="Dictionary-Headword" isEnabled="true" field="Owner" subField="MLOwnerOutlineName" cssClassNameOverride="headword">
 				<WritingSystemOptions writingSystemType="vernacular" displayWSAbreviation="false">
 					<Option id="vernacular" isEnabled="true"/>
 				</WritingSystemOptions>
@@ -2115,6 +2137,8 @@
 					<Option id="analysis" isEnabled="true"/>
 				</WritingSystemOptions>
 			</ConfigurationItem>
+			<ConfigurationItem name="Creator" before=" " after="," isEnabled="true" field="@extension:SIL.FieldWorks.XWorks.DictConfigModelExt.Creator" cssClassNameOverride="creator" />
+			<ConfigurationItem name="Copyright &amp; License" before=" " after="" isEnabled="true" field="@extension:SIL.FieldWorks.XWorks.DictConfigModelExt.CopyrightAndLicense" cssClassNameOverride="license" />
 		</ConfigurationItem>
 	</ConfigurationItem>
 	<SharedItems>
@@ -2166,6 +2190,11 @@
 						<Option id="analysis" isEnabled="true"/>
 					</WritingSystemOptions>
 				</ConfigurationItem>
+			</ConfigurationItem>
+			<ConfigurationItem name="Exemplar" isEnabled="false" before="" after=" " field="Exemplar">
+				<WritingSystemOptions writingSystemType="vernacular" displayWSAbreviation="false">
+					<Option id="vernacular" isEnabled="true"/>
+				</WritingSystemOptions>
 			</ConfigurationItem>
 			<ConfigurationItem name="Definition (or Gloss)" between=" " after="" isEnabled="true" field="DefinitionOrGloss">
 				<WritingSystemOptions writingSystemType="analysis" displayWSAbreviation="false">
@@ -2853,6 +2882,11 @@
 							<Option id="analysis" isEnabled="true"/>
 						</WritingSystemOptions>
 					</ConfigurationItem>
+				</ConfigurationItem>
+				<ConfigurationItem name="Exemplar" isEnabled="false" before="" after=" " field="Exemplar">
+					<WritingSystemOptions writingSystemType="vernacular" displayWSAbreviation="false">
+						<Option id="vernacular" isEnabled="true" />
+					</WritingSystemOptions>
 				</ConfigurationItem>
 				<ConfigurationItem name="Definition (or Gloss)" between=" " after="" isEnabled="true" field="DefinitionOrGloss">
 					<WritingSystemOptions writingSystemType="analysis" displayWSAbreviation="false">
@@ -3594,16 +3628,21 @@
 			</ConfigurationItem>
 			<ConfigurationItem name="Date Created" before="  Created on: " after="" isEnabled="false" field="DateCreated"/>
 			<ConfigurationItem name="Date Modified" before=" Modified on: " after="" isEnabled="false" field="DateModified"/>
-			<ConfigurationItem name="Pictures" between="  " after="" style="Dictionary-Pictures" isEnabled="true" field="PicturesOfSenses" cssClassNameOverride="pictures">
+			<ConfigurationItem name="Pictures" between="" after="" style="Dictionary-Pictures" isEnabled="true" field="PicturesOfSenses" cssClassNameOverride="pictures">
 				<PictureOptions minimumHeight="0" maximumHeight="1" minimumWidth="0" maximumWidth="0" pictureLocation="right" stackPictures="false" />
 				<ConfigurationItem name="Thumbnail" after=" " isEnabled="true" field="PictureFileRA" cssClassNameOverride="thumbnail"/>
+				<ConfigurationItem name="Caption (or Headword)" between=" " isEnabled="false" field="CaptionOrHeadword">
+					<WritingSystemOptions writingSystemType="both" displayWSAbreviation="false">
+						<Option id="vernacular" isEnabled="true"/>
+					</WritingSystemOptions>
+				</ConfigurationItem>
 				<ConfigurationItem name="Caption" between=" " isEnabled="true" field="Caption">
 					<WritingSystemOptions writingSystemType="both" displayWSAbreviation="false">
 						<Option id="vernacular" isEnabled="true"/>
 					</WritingSystemOptions>
 				</ConfigurationItem>
 				<!-- Using cssClassNameOverride="headword" to show the Configure Headword Numbers button -->
-				<ConfigurationItem name="Headword" between=" " after="" style="Dictionary-Headword" isEnabled="false" field="Owner" subField="OwnerOutlineName" cssClassNameOverride="headword">
+				<ConfigurationItem name="Headword" between=" " after="" style="Dictionary-Headword" isEnabled="false" field="Owner" subField="MLOwnerOutlineName" cssClassNameOverride="headword">
 					<WritingSystemOptions writingSystemType="vernacular" displayWSAbreviation="false">
 						<Option id="vernacular" isEnabled="true"/>
 					</WritingSystemOptions>
@@ -3613,6 +3652,8 @@
 						<Option id="analysis" isEnabled="true"/>
 					</WritingSystemOptions>
 				</ConfigurationItem>
+				<ConfigurationItem name="Creator" before=" " after="," isEnabled="true" field="@extension:SIL.FieldWorks.XWorks.DictConfigModelExt.Creator" cssClassNameOverride="creator" />
+				<ConfigurationItem name="Copyright &amp; License" before=" " after="" isEnabled="true" field="@extension:SIL.FieldWorks.XWorks.DictConfigModelExt.CopyrightAndLicense" cssClassNameOverride="license" />
 			</ConfigurationItem>
 			<ConfigurationItem name="Minor Subsubentries" styleType="character" before=" " between="; " after="" isEnabled="true" style="Dictionary-Subsubentry" field="Subentries">
 				<ComplexFormOptions list="complex" displayEachComplexFormInParagraph="true">

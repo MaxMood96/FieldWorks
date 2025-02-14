@@ -420,6 +420,18 @@ Are you SURE you want to delete the field {2}?</value>
   <data name="ksTemplateTooDeep" xml:space="preserve">
     <value>A discourse chart template can only have three levels (template, column group, and column).</value>
   </data>
+  <data name="ksNewTemplate" xml:space="preserve">
+    <value>New Template</value>
+    <comment>Name for a new discourse chart template when it is created.</comment>
+  </data>
+  <data name="ksColumnGroupX" xml:space="preserve">
+    <value>Column Group {0}</value>
+    <comment>Used to populate a discourse chart template template. {0} is the index of the column group, such as "2"</comment>
+  </data>
+  <data name="ksColumnX" xml:space="preserve">
+    <value>Column {0}</value>
+    <comment>Used to populate a discourse chart template template. {0} is the index of the column and its group, such as "2.1"</comment>
+  </data>
   <data name="MoveDown" xml:space="preserve">
     <value>Move Down</value>
     <comment>action on a tree view item</comment>
@@ -810,7 +822,7 @@ Are you sure you want to delete this list?</value>
     <value>Please remove the punctuation from the custom field name ("{0}") to allow export and some other functions to work.</value>
   </data>
   <data name="PunctInFieldNameWarning" xml:space="preserve">
-    <value>The custom field name "{0}" includes punctuation characters. This may cause export to fail or make the exported file difficult for other programs to use. We recommend that you rename your custom field and then do the export again.
+    <value>The custom field name "{0}" includes punctuation characters. This may cause export to fail or make the exported file difficult for other programs to use.  Please contact flex_errors@sil.org for help modifying your project.
 Do you want to continue with the export?</value>
   </data>
   <data name="ksRedoMacro" xml:space="preserve">
@@ -1003,7 +1015,7 @@ See USFM documentation for help.</value>
     <comment>Message displayed in Upload to Webonary dialog when there is an error connecting. {0} is a newline; {1} is the HTTP status code (e.g. 404); {2} is the error message.</comment>
   </data>
   <data name="ksWebonaryUploadSuccessful" xml:space="preserve">
-    <value>Upload successful. Preparing your data for publication. This may take several minutes to a few hours depending on the size of your dictionary. You will receive an email when the process is complete. You can examine the progress on the admin page of your Webonary site. You may now safely close this dialog.</value>
+    <value>Upload successful. Preparing your data for publication. Please check your Webonary site. You may now safely close this dialog.</value>
   </data>
   <data name="ksWebonaryUploadSuccessfulErrorProcessing" xml:space="preserve">
     <value>The upload was successful; however, there were errors processing your data.</value>
@@ -1068,6 +1080,17 @@ See USFM documentation for help.</value>
   </data>
   <data name="FinishedGeneratingEntries" xml:space="preserve">
     <value>The dictionary is now ready to print. Click OK to proceed to the Print dialog.</value>
+  </data>
+  <data name="COMExceptionPrintingLargeDictionary" xml:space="preserve">
+    <value>There was a problem printing your dictionary. You can try again, but it may be too large for FieldWorks to print. For large dictionaries, FieldWorks can instead generate a PDF for you to print. You can control the maximum number of entries FieldWorks will try to print using the environment variable {0} (you will need to restart FieldWorks for changes to take effect).</value>
+    <comment>{0} is the name of the environment variable.</comment>
+  </data>
+  <data name="MissingGeckofxHtmlToPdf" xml:space="preserve">
+    <value>A component of FieldWorks, {0}, is missing. This prevents printing. Antivirus software sometimes removes files. You may need technical help to repair the FieldWorks installation and protect this file from being deleted again.</value>
+    <comment>{0} is the name of the missing file.</comment>
+  </data>
+  <data name="SomethingWentWrongTryingToPrintDict" xml:space="preserve">
+    <value>Something went wrong trying to print. An operation may have timed out. You may be able to export your dictionary from the File menu and print it using your browser.</value>
   </data>
   <data name="ksSubsenseNumberConfig" xml:space="preserve">
     <value>Subsense Number Configuration</value>
@@ -1232,5 +1255,32 @@ See USFM documentation for help.</value>
   </data>
   <data name="ImportTranslatedGramCatsPrompt" xml:space="preserve">
     <value>Importing translated grammatical category content will update all grammatical categories (parts of speech) in this project with the latest translations for all Analysis Writing Systems, including English.</value>
+  </data>
+  <data name="Webonary_UnexpectedUploadError" xml:space="preserve">
+    <value>Unexpected error encountered while uploading to webonary.</value>
+  </data>
+  <data name="UploadToWebonaryController_RetryAfterFailedConnection" xml:space="preserve">
+    <value>Initial connection failed retrying...</value>
+  </data>
+  <data name="DeletePhonology" xml:space="preserve">
+    <value>This will permanently delete the existing phonology and all references to it.  Do you want to continue?</value>
+  </data>
+  <data name="MissingCopyrightAndLicense" xml:space="preserve">
+    <value>{0} was not uploaded because it was missing copyright and license information.</value>
+  </data>
+  <data name="WebonaryLogViewer_Full_Log" xml:space="preserve">
+    <value>Full Log</value>
+  </data>
+  <data name="WebonaryLogViewer_Rejected_Files" xml:space="preserve">
+    <value>Rejected Files</value>
+  </data>
+  <data name="WebonaryLogViewer_Errors-Warnings" xml:space="preserve">
+    <value>Errors &amp; Warnings</value>
+  </data>
+  <data name="WebonaryLogViewer_CopyFileError" xml:space="preserve">
+    <value>Could not copy the file. {0}</value>
+  </data>
+  <data name="WebonaryLogViewer_Save_a_copy" xml:space="preserve">
+    <value>Save a copy</value>
   </data>
 </root>

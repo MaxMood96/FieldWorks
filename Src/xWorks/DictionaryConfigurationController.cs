@@ -1145,7 +1145,16 @@ namespace SIL.FieldWorks.XWorks
 				if (availableWSs.All(opt => opt.Id != wsOptions.Options[i].Id) &&
 					WritingSystemServices.GetMagicWsIdFromName(wsOptions.Options[i].Id) == 0)
 				{
-					wsOptions.Options.RemoveAt(i);
+					// If Enabled, then add it to availableWSs.
+					if (wsOptions.Options[i].IsEnabled)
+					{
+						availableWSs.Add(wsOptions.Options[i]);
+					}
+					// If not Enabled, then remove it from wsOptions.Options.
+					else
+					{
+						wsOptions.Options.RemoveAt(i);
+					}
 				}
 			}
 			// ensure at least one is enabled (default to the first, which is always Magic)
@@ -1163,32 +1172,32 @@ namespace SIL.FieldWorks.XWorks
 			switch (wsType)
 			{
 				case DictionaryNodeWritingSystemOptions.WritingSystemType.Vernacular:
-					wsList.Add(new DictionaryNodeListOptions.DictionaryNodeOption() { Id = WritingSystemServices.kwsVern.ToString() });
-					wsList.AddRange(cache.ServiceLocator.WritingSystems.CurrentVernacularWritingSystems.Select(
-							ws => new DictionaryNodeListOptions.DictionaryNodeOption() { Id = ws.Id }));
+					wsList.Add(new DictionaryNodeListOptions.DictionaryNodeOption { Id = WritingSystemServices.kwsVern.ToString() });
+					wsList.AddRange(cache.ServiceLocator.WritingSystems.VernacularWritingSystems.Select(
+							ws => new DictionaryNodeListOptions.DictionaryNodeOption { Id = ws.Id }));
 					break;
 				case DictionaryNodeWritingSystemOptions.WritingSystemType.Analysis:
-					wsList.Add(new DictionaryNodeListOptions.DictionaryNodeOption() { Id = WritingSystemServices.kwsAnal.ToString() });
-					wsList.AddRange(cache.ServiceLocator.WritingSystems.CurrentAnalysisWritingSystems.Select(
-							ws => new DictionaryNodeListOptions.DictionaryNodeOption() { Id = ws.Id }));
+					wsList.Add(new DictionaryNodeListOptions.DictionaryNodeOption { Id = WritingSystemServices.kwsAnal.ToString() });
+					wsList.AddRange(cache.ServiceLocator.WritingSystems.AnalysisWritingSystems.Select(
+							ws => new DictionaryNodeListOptions.DictionaryNodeOption { Id = ws.Id }));
 					break;
 				case DictionaryNodeWritingSystemOptions.WritingSystemType.Both:
-					wsList.Add(new DictionaryNodeListOptions.DictionaryNodeOption() { Id = WritingSystemServices.kwsVern.ToString() });
-					wsList.Add(new DictionaryNodeListOptions.DictionaryNodeOption() { Id = WritingSystemServices.kwsAnal.ToString() });
-					wsList.AddRange(cache.ServiceLocator.WritingSystems.CurrentVernacularWritingSystems.Select(
-							ws => new DictionaryNodeListOptions.DictionaryNodeOption() { Id = ws.Id }));
-					wsList.AddRange(cache.ServiceLocator.WritingSystems.CurrentAnalysisWritingSystems.Select(
-							ws => new DictionaryNodeListOptions.DictionaryNodeOption() { Id = ws.Id }));
+					wsList.Add(new DictionaryNodeListOptions.DictionaryNodeOption { Id = WritingSystemServices.kwsVern.ToString() });
+					wsList.Add(new DictionaryNodeListOptions.DictionaryNodeOption { Id = WritingSystemServices.kwsAnal.ToString() });
+					wsList.AddRange(cache.ServiceLocator.WritingSystems.VernacularWritingSystems.Select(
+							ws => new DictionaryNodeListOptions.DictionaryNodeOption { Id = ws.Id }));
+					wsList.AddRange(cache.ServiceLocator.WritingSystems.AnalysisWritingSystems.Select(
+							ws => new DictionaryNodeListOptions.DictionaryNodeOption { Id = ws.Id }));
 					break;
 				case DictionaryNodeWritingSystemOptions.WritingSystemType.Pronunciation:
-					wsList.Add(new DictionaryNodeListOptions.DictionaryNodeOption() { Id = WritingSystemServices.kwsPronunciation.ToString() });
+					wsList.Add(new DictionaryNodeListOptions.DictionaryNodeOption { Id = WritingSystemServices.kwsPronunciation.ToString() });
 					wsList.AddRange(cache.ServiceLocator.WritingSystems.CurrentPronunciationWritingSystems.Select(
-							ws => new DictionaryNodeListOptions.DictionaryNodeOption() { Id = ws.Id }));
+							ws => new DictionaryNodeListOptions.DictionaryNodeOption { Id = ws.Id }));
 					break;
 				case DictionaryNodeWritingSystemOptions.WritingSystemType.Reversal:
-					wsList.Add(new DictionaryNodeListOptions.DictionaryNodeOption() { Id = WritingSystemServices.kwsReversalIndex.ToString() });
-					wsList.AddRange(cache.ServiceLocator.WritingSystems.CurrentAnalysisWritingSystems.Select(
-							ws => new DictionaryNodeListOptions.DictionaryNodeOption() { Id = ws.Id }));
+					wsList.Add(new DictionaryNodeListOptions.DictionaryNodeOption { Id = WritingSystemServices.kwsReversalIndex.ToString() });
+					wsList.AddRange(cache.ServiceLocator.WritingSystems.AnalysisWritingSystems.Select(
+							ws => new DictionaryNodeListOptions.DictionaryNodeOption { Id = ws.Id }));
 					break;
 			}
 			return wsList;
@@ -1368,18 +1377,25 @@ namespace SIL.FieldWorks.XWorks
 			{
 				customField.Parent = parent;
 			}
+
+			// customFieldNodes has one node representing each customField. These fields might be duplicated
+			// in the parent or in its group (each with different LabelSuffix). So, make a copy of customFieldNodes,
+			// that we will remove custom fields from, to determine if there are any custom fields that need to be
+			// added to parent. (LT-21310).
+			List<ConfigurableDictionaryNode> customFieldNodesToAddToParent = new List<ConfigurableDictionaryNode>(customFieldNodes);
+
 			if (parent.Children == null)
 				parent.Children = new List<ConfigurableDictionaryNode>();
 			else
 			{
-				MergeCustomFieldLists(parent.Children, customFieldNodes);
+				MergeCustomFieldLists(parent.Children, customFieldNodes, customFieldNodesToAddToParent);
 				// If we have children, through the children and grouped children, removing any custom fields that no longer exist.
 				foreach (var group in parent.Children.Where(child => child.DictionaryNodeOptions is DictionaryNodeGroupingOptions && child.Children != null))
 				{
 					// Set the parent on the customFieldNodes (for Contains)
 					foreach(var customField in customFieldNodes)
 						customField.Parent = group;
-					MergeCustomFieldLists(group.Children, customFieldNodes);
+					MergeCustomFieldLists(group.Children, customFieldNodes, customFieldNodesToAddToParent);
 				}
 				// Set the parent back on the customFieldNodes (for when new fields are added)
 				foreach(var customField in customFieldNodes)
@@ -1387,10 +1403,10 @@ namespace SIL.FieldWorks.XWorks
 			}
 
 			// Add any custom fields that didn't already exist in the children (at the end).
-			parent.Children.AddRange(customFieldNodes);
+			parent.Children.AddRange(customFieldNodesToAddToParent);
 		}
 
-		private static void MergeCustomFieldLists(List<ConfigurableDictionaryNode> existingNodes, List<ConfigurableDictionaryNode> customFieldNodes)
+		private static void MergeCustomFieldLists(List<ConfigurableDictionaryNode> existingNodes, List<ConfigurableDictionaryNode> customFieldNodes, List<ConfigurableDictionaryNode> customFieldNodesToAddToParent)
 		{
 			// Traverse through the existing nodes from end to beginning, removing any custom fields that no longer exist.
 			for (var i = existingNodes.Count - 1; i >= 0; --i)
@@ -1404,7 +1420,13 @@ namespace SIL.FieldWorks.XWorks
 				}
 				else
 				{
-					customFieldNodes.Remove(configNode); // field found
+					// We don't want to add a custom field to the parent if the custom field is used in
+					// a child (even if that child uses a custom field with a LabelSuffix).
+					// Since the Equals() method on ConfigurableDictionaryNode compares the LabelSuffix
+					// (along with Label and FieldDescription), calling Remove() will not remove a custom
+					// field if configNode contains a LabelSuffix. So use our own remove code.
+					customFieldNodesToAddToParent.RemoveAll(x =>
+						((x.Label == configNode.Label) && (x.FieldDescription == configNode.FieldDescription)));
 				}
 			}
 		}
@@ -1536,14 +1558,12 @@ namespace SIL.FieldWorks.XWorks
 		}
 
 		/// <summary>
-		/// Search the TreeNode tree to find a starting node based on matching the "class"
-		/// attributes of the generated XHTML tracing back from the XHTML element clicked.
-		/// If no match is found, SelectedNode is not set.  Otherwise, the best match found
-		/// is used to set SelectedNode.
+		/// Search the TreeNode tree to find a starting node based on nodeId attribute - a hash of a ConfigurableDictionaryNode
+		/// generated into the xhtml. If nothing is found SelectedNode is not set.
 		/// </summary>
-		internal void SetStartingNode(List<string> classList)
+		internal void SetStartingNode(string nodeId)
 		{
-			if (classList == null || classList.Count == 0)
+			if (string.IsNullOrEmpty(nodeId))
 				return;
 			if (View != null &&
 				View.TreeControl != null &&
@@ -1557,22 +1577,15 @@ namespace SIL.FieldWorks.XWorks
 					var configNode = node.Tag as ConfigurableDictionaryNode;
 					if (configNode == null)
 						continue;
-					var cssClass = CssGenerator.GetClassAttributeForConfig(configNode);
-					if (classList[0].Split(' ').Contains(cssClass))
+					topNode = FindConfigNode(configNode, nodeId, new List<ConfigurableDictionaryNode>());
+					if (topNode != null)
 					{
-						topNode = configNode;
 						break;
 					}
 				}
-				if (topNode == null)
-					return;
-				// We have a match, so search through the TreeNode tree to find the TreeNode tagged
-				// with the given configuration node.  If found, set that as the SelectedNode.
-				classList.RemoveAt(0);
-				var startingConfigNode = FindConfigNode(topNode, classList);
 				foreach (TreeNode node in View.TreeControl.Tree.Nodes)
 				{
-					var startingTreeNode = FindMatchingTreeNode(node, startingConfigNode);
+					var startingTreeNode = FindMatchingTreeNode(node, topNode);
 					if (startingTreeNode != null)
 					{
 						View.TreeControl.Tree.SelectedNode = startingTreeNode;
@@ -1583,48 +1596,31 @@ namespace SIL.FieldWorks.XWorks
 		}
 
 		/// <summary>
-		/// Recursively descend the configuration tree, progressively matching nodes against CSS class path.  Stop
-		/// when we run out of both tree and classes.  Classes can be skipped if not matched.  Running out of tree nodes
-		/// before running out of classes causes one level of backtracking up the configuration tree to look for a better match.
+		/// Recursively descend the configuration tree depth first until a matching nodeId is found
 		/// </summary>
 		/// <remarks>LT-17213 Now 'internal static' so DictionaryConfigurationDlg can use it.</remarks>
-		internal static ConfigurableDictionaryNode FindConfigNode(ConfigurableDictionaryNode topNode, List<string> classPath)
+		internal static ConfigurableDictionaryNode FindConfigNode(ConfigurableDictionaryNode topNode, string nodeId, List<ConfigurableDictionaryNode> visited)
 		{
-			if (classPath.Count == 0)
+			if (string.IsNullOrEmpty(nodeId) || $"{topNode.GetHashCode()}".Equals(nodeId))
 			{
 				return topNode; // what we have already is the best we can find.
 			}
+			visited.Add(topNode);
 
-			// If we can't go further down the configuration tree, but still have classes to match, back up one level
-			// and try matching with the remaining classes.  The configuration tree doesn't always map exactly with
-			// the XHTML tree structure.  For instance, in the XHTML, Examples contains instances of Example, each
-			// of which contains an instance of Translations, which contains instances of Translation.  In the configuration
-			// tree, Examples contains Example and Translations at the same level.
-			if (topNode.ReferencedOrDirectChildren == null || topNode.ReferencedOrDirectChildren.Count == 0)
+			if (topNode.ReferencedOrDirectChildren != null)
 			{
-				var match = FindConfigNode(topNode.Parent, classPath);
-				return ReferenceEquals(match, topNode.Parent)
-					? topNode	// this is the best we can find.
-					: match;	// we found something better!
-			}
-			ConfigurableDictionaryNode matchingNode = null;
-			foreach (var node in topNode.ReferencedOrDirectChildren)
-			{
-				var cssClass = CssGenerator.GetClassAttributeForConfig(node);
-				// LT-17359 a reference node might have "senses mainentrysubsenses"
-				if (cssClass == classPath[0].Split(' ')[0])
+				foreach (var node in topNode.ReferencedOrDirectChildren)
 				{
-					matchingNode = node;
-					break;
+					if (visited.Contains(node))
+						continue;
+					var match = FindConfigNode(node, nodeId, visited);
+					if (match != null)
+					{
+						return match;
+					}
 				}
 			}
-			// If we didn't match, skip this class in the list and try the next class, looking at the same configuration
-			// node.  There are classes in the XHTML that aren't represented in the configuration nodes.  ("sensecontent"
-			// and "sense" among others)
-			if (matchingNode == null)
-				matchingNode = topNode;
-			classPath.RemoveAt(0);
-			return FindConfigNode(matchingNode, classPath);
+			return null;
 		}
 
 		/// <summary>

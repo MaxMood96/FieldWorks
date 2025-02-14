@@ -251,7 +251,7 @@ namespace SIL.FieldWorks.IText
 		/// </summary>
 		public string Persist(ILgWritingSystemFactory wsf)
 		{
-			List<CustomLineOption> customOptions = GetCustomLineOptions(Mode);
+			List<CustomLineOption> customOptions = GetCustomLineOptions();
 
 			var builder = new StringBuilder();
 			builder.Append(GetType().Name + "_v3");
@@ -302,7 +302,7 @@ namespace SIL.FieldWorks.IText
 			result.ClearAllLineSpecs();
 
 			List<LineOption> requiredOptions = result.LineOptions(mode).ToList();
-			List<CustomLineOption> customOptions = result.GetCustomLineOptions(mode);
+			List<CustomLineOption> customOptions = result.GetCustomLineOptions();
 			bool updatePropTable = false;
 			for (int i = 1; i < parts.Length; i++)
 			{
@@ -406,6 +406,21 @@ namespace SIL.FieldWorks.IText
 		public virtual int Add(InterlinLineSpec spec)
 		{
 			bool fGotMorpheme = HaveMorphemeLevel;
+
+			// If the spec already exists then just update the enabled value.
+			for (int i=0; i < m_allLineSpecs.Count; i++)
+			{
+				if (m_allLineSpecs[i].Flid == spec.Flid && m_allLineSpecs[i].WritingSystem == spec.WritingSystem)
+				{
+					m_allLineSpecs[i].Enabled = spec.Enabled;
+					Debug.Assert(m_allLineSpecs[i].IsMagicWritingSystem == spec.IsMagicWritingSystem);
+					Debug.Assert(m_allLineSpecs[i].LexEntryLevel == spec.LexEntryLevel);
+					Debug.Assert(m_allLineSpecs[i].MorphemeLevel == spec.MorphemeLevel);
+					Debug.Assert(m_allLineSpecs[i].WordLevel == spec.WordLevel);
+					return i;
+				}
+			}
+
 			for (int i = m_allLineSpecs.Count - 1; i >= 0; i--)
 			{
 				if (m_allLineSpecs[i].Flid == spec.Flid)
@@ -538,7 +553,7 @@ namespace SIL.FieldWorks.IText
 
 		private LineOption[] LineOptions(InterlinMode mode)
 		{
-			var customLineOptions = GetCustomLineOptions(mode);
+			var customLineOptions = GetCustomLineOptions();
 
 			if (mode == InterlinMode.Chart)
 			{
@@ -569,26 +584,19 @@ namespace SIL.FieldWorks.IText
 			}.Union(customLineOptions).ToArray();
 		}
 
-		private List<CustomLineOption> GetCustomLineOptions(InterlinMode mode)
+		private List<CustomLineOption> GetCustomLineOptions()
 		{
 			var customLineOptions = new List<CustomLineOption>();
-			switch (mode)
+			if (m_cache != null)
 			{
-				case InterlinMode.Analyze:
-				case InterlinMode.Chart:
-				case InterlinMode.Gloss:
-					if (m_cache != null)
-					{
-						var classId = m_cache.MetaDataCacheAccessor.GetClassId("Segment");
-						var mdc = (IFwMetaDataCacheManaged)m_cache.MetaDataCacheAccessor;
-						foreach (int flid in mdc.GetFields(classId, false, (int)CellarPropertyTypeFilter.All))
-						{
-							if (!mdc.IsCustom(flid))
-								continue;
-							customLineOptions.Add(new CustomLineOption(flid, mdc.GetFieldLabel(flid), mdc.GetFieldName(flid)));
-						}
-					}
-					break;
+				var classId = m_cache.MetaDataCacheAccessor.GetClassId("Segment");
+				var mdc = (IFwMetaDataCacheManaged)m_cache.MetaDataCacheAccessor;
+				foreach (int flid in mdc.GetFields(classId, false, (int)CellarPropertyTypeFilter.All))
+				{
+					if (!mdc.IsCustom(flid))
+						continue;
+					customLineOptions.Add(new CustomLineOption(flid, mdc.GetFieldLabel(flid), mdc.GetFieldName(flid)));
+				}
 			}
 
 			return customLineOptions;
@@ -881,7 +889,7 @@ namespace SIL.FieldWorks.IText
 		/// </summary>
 		/// <param name="flid"></param>
 		/// <param name="wsRequested">If zero, supply the default ws for the field; otherwise
-		/// use the one supplied.</param>
+		/// use the one supplied. Custom fields always use the defaults.</param>
 		/// <returns></returns>
 		internal InterlinLineSpec CreateSpec(int flid, int wsRequested, bool enabled=true)
 		{
@@ -889,6 +897,7 @@ namespace SIL.FieldWorks.IText
 			bool fMorphemeLevel = false;
 			bool fWordLevel = true;
 			int flidString = 0;
+			bool bCustom = false;
 			ColumnConfigureDialog.WsComboContent comboContent = ColumnConfigureDialog.WsComboContent.kwccAnalysis; // The usual choice
 			switch (flid)
 			{
@@ -946,21 +955,31 @@ namespace SIL.FieldWorks.IText
 							throw new Exception("Adding unknown field to interlinear");
 						}
 
+						bCustom = true;
 						ws = mdc.GetFieldWs(flid);
-						if (ws != -1)
+						if ((ws != WritingSystemServices.kwsAnal) && (ws != WritingSystemServices.kwsVern))
 						{
 							// Oh, so we're letting users choose their writing system on custom segments now!
 							Debug.Fail("The code here is not ready to receive writing systems set on custom segments.");
 						}
-						ws = WritingSystemServices.kwsFirstAnal;
-						comboContent = ColumnConfigureDialog.WsComboContent.kwccAnalysis;
+
+						if (ws == WritingSystemServices.kwsVern)
+						{
+							ws = m_cache.LangProject.DefaultVernacularWritingSystem.Handle;
+							comboContent = ColumnConfigureDialog.WsComboContent.kwccVernacular;
+						}
+						else
+						{
+							ws = m_cache.LangProject.DefaultAnalysisWritingSystem.Handle;
+							comboContent = ColumnConfigureDialog.WsComboContent.kwccAnalysis;
+						}
 					}
 					break;
 			}
 			InterlinLineSpec spec = new InterlinLineSpec();
 			spec.ComboContent = comboContent;
 			spec.Flid = flid;
-			spec.WritingSystem = wsRequested == 0 ? ws : wsRequested;
+			spec.WritingSystem = (wsRequested == 0 || bCustom) ? ws : wsRequested;
 			spec.MorphemeLevel = fMorphemeLevel;
 			spec.WordLevel = fWordLevel;
 			spec.StringFlid = flidString;
@@ -1090,20 +1109,12 @@ namespace SIL.FieldWorks.IText
 		/// <returns></returns>
 		internal List<InterlinLineSpec> EnabledItemsWithFlids(int[] flids)
 		{
-			return EnabledItemsWithFlids(flids, null);
-		}
-
-		internal List<InterlinLineSpec> EnabledItemsWithFlids(int[] flids, int[] wsList)
-		{
-			Debug.Assert(wsList == null || wsList.Length == flids.Length,
-				"wsList should be empty or match the same item count in flids.");
 			List<InterlinLineSpec> result = new List<InterlinLineSpec>();
 			for (int i = 0; i < EnabledLineSpecs.Count; i++)
 			{
 				for (int j = 0; j < flids.Length; j++)
 				{
-					if (EnabledLineSpecs[i].Flid == flids[j] &&
-						(wsList == null || EnabledLineSpecs[i].WritingSystem == wsList[j]))
+					if (EnabledLineSpecs[i].Flid == flids[j])
 					{
 						result.Add(EnabledLineSpecs[i]);
 					}
@@ -1270,8 +1281,7 @@ namespace SIL.FieldWorks.IText
 		{
 			if (!base.OkToRemove(spec, out message))
 				return false;
-			if (spec.Flid == kflidWord && spec.WritingSystem == m_wsDefVern &&
-				EnabledItemsWithFlids(new int[] {kflidWord}, new int[] {m_wsDefVern}).Count < 2)
+			if (spec.Flid == kflidWord && spec.WritingSystem == m_wsDefVern)
 			{
 				message = ITextStrings.ksNeedWordLine;
 				return false;

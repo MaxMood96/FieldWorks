@@ -359,7 +359,7 @@ namespace SIL.FieldWorks.XWorks
 				}
 				m_fUsingHistory = true;
 				m_lnkActive = Pop(m_backStack);
-				FollowActiveLink();
+				FollowActiveLink(false);
 			}
 
 			return true;
@@ -377,7 +377,7 @@ namespace SIL.FieldWorks.XWorks
 			{
 				m_fUsingHistory = true;
 				m_lnkActive = Pop(m_forwardStack);
-				FollowActiveLink();
+				FollowActiveLink(false);
 			}
 			return true;
 		}
@@ -431,20 +431,20 @@ namespace SIL.FieldWorks.XWorks
 			m_cBackStackOrig = m_backStack.Count;
 			m_lnkActive = lnk as FwLinkArgs;
 
-			return FollowActiveLink();
+			return FollowActiveLink(true);
 		}
 
-		private bool FollowActiveLink()
+		private bool FollowActiveLink(bool suspendLoadingRecord)
 		{
 			try
 			{
+				var cache = m_propertyTable.GetValue<LcmCache>("cache");
 				//Debug.Assert(!(m_lnkActive is FwAppArgs), "Beware: This will not handle link requests for other databases/applications." +
 				//	" To handle other databases or applications, pass the FwAppArgs to the IFieldWorksManager.HandleLinkRequest method.");
 				if (m_lnkActive.ToolName == "default")
 				{
 					// Need some smarts here. The link creator was not sure what tool to use.
 					// The object may also be a child we don't know how to jump to directly.
-					var cache = m_propertyTable.GetValue<LcmCache>("cache");
 					ICmObject target;
 					if (!cache.ServiceLocator.ObjectRepository.TryGetObject(m_lnkActive.TargetGuid, out target))
 						return false; // or message?
@@ -500,10 +500,16 @@ namespace SIL.FieldWorks.XWorks
 					m_lnkActive = new FwLinkArgs(realTool, realTarget.Guid);
 					// Todo JohnT: need to do something special here if we c
 				}
+				// Return false if the link is to a different database
+				var databaseName = m_lnkActive.PropertyTableEntries.Where(p => p.name == "database").FirstOrDefault()?.value as string;
+				if (databaseName != null && databaseName != "this$" && databaseName != cache.LangProject.ShortName && m_fFollowingLink)
+				{
+					return false;
+				}
 				// It's important to do this AFTER we set the real tool name if it is "default". Otherwise, the code that
 				// handles the jump never realizes we have reached the desired tool (as indicated by the value of
 				// SuspendLoadingRecordUntilOnJumpToRecord) and we stop recording context history and various similar problems.
-				if (m_lnkActive.TargetGuid != Guid.Empty)
+				if (suspendLoadingRecord && m_lnkActive.TargetGuid != Guid.Empty)
 				{
 					// allow tools to skip loading a record if we're planning to jump to one.
 					// interested tools will need to reset this "JumpToRecord" property after handling OnJumpToRecord.
@@ -518,7 +524,6 @@ namespace SIL.FieldWorks.XWorks
 				// or more likely, when the HVO was set to -1.
 				if (m_lnkActive.TargetGuid != Guid.Empty)
 				{
-					LcmCache cache = m_propertyTable.GetValue<LcmCache>("cache");
 					ICmObject obj = cache.ServiceLocator.GetInstance<ICmObjectRepository>().GetObject(m_lnkActive.TargetGuid);
 					if (obj is IReversalIndexEntry && m_lnkActive.ToolName == "reversalToolEditComplete")
 					{
@@ -547,12 +552,21 @@ namespace SIL.FieldWorks.XWorks
 			}
 			catch(Exception err)
 			{
-				string s;
-				if (err.InnerException != null && !string.IsNullOrEmpty(err.InnerException.Message))
-					s = String.Format(xWorksStrings.UnableToFollowLink0, err.InnerException.Message);
-				else
-					s = xWorksStrings.UnableToFollowLink;
-				MessageBox.Show(s, xWorksStrings.FailedJump, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+				// Stop suspension of loading records.
+				m_propertyTable.SetProperty("SuspendLoadingRecordUntilOnJumpToRecord", "",
+					PropertyTable.SettingsGroup.LocalSettings,
+					true);
+				m_propertyTable.SetPropertyPersistence("SuspendLoadingRecordUntilOnJumpToRecord", false);
+
+				if (m_lnkActive == null || m_lnkActive.DisplayErrorMsg)
+				{
+					string s;
+					if (err.InnerException != null && !string.IsNullOrEmpty(err.InnerException.Message))
+						s = String.Format(xWorksStrings.UnableToFollowLink0, err.InnerException.Message);
+					else
+						s = xWorksStrings.UnableToFollowLink;
+					MessageBox.Show(s, xWorksStrings.FailedJump, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+				}
 				return false;
 			}
 			return true;	//we handled this.

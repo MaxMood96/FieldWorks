@@ -11,7 +11,6 @@ using SIL.LCModel.Core.KernelInterfaces;
 using SIL.FieldWorks.Common.ViewsInterfaces;
 using SIL.FieldWorks.Common.RootSites;
 using SIL.LCModel;
-using SIL.LCModel.Core.Text;
 using SIL.LCModel.DomainServices;
 using SIL.LCModel.Infrastructure;
 
@@ -287,7 +286,7 @@ namespace SIL.FieldWorks.IText
 			WriteItem(itemType, tss);
 		}
 
-		private void WriteItem(string itemType, ITsString tss)
+		protected void WriteItem(string itemType, ITsString tss)
 		{
 			m_writer.WriteStartElement("item");
 			m_writer.WriteAttributeString("type", itemType);
@@ -603,6 +602,11 @@ namespace SIL.FieldWorks.IText
 					break;
 				case InterlinVc.kfragMorphBundle:
 					m_writer.WriteStartElement("morphemes");
+					StackItem top = this.PeekStack;
+					if (top != null && top.m_stringProps.ContainsKey(InterlinVc.ktagAnalysisStatus))
+					{
+						m_writer.WriteAttributeString("analysisStatus", top.m_stringProps[InterlinVc.ktagAnalysisStatus]);
+					}
 					break;
 				default:
 					break;
@@ -834,12 +838,8 @@ namespace SIL.FieldWorks.IText
 					m_writer.WriteAttributeString("media-file", phrase.MediaURIRA.Guid.ToString());
 				}
 
-				var bestGuessWs = phrase.BaselineText.get_WritingSystem(0);
-				m_writer.WriteStartElement("item");
-				m_writer.WriteAttributeString("type", "txt");
-				m_writer.WriteAttributeString("lang", m_wsManager.GetIcuLocaleFromWs(bestGuessWs));
-				m_writer.WriteValue(phrase.BaselineText.Text);
-				m_writer.WriteEndElement();
+				WriteItem("txt", phrase.BaselineText);
+
 			}
 		}
 

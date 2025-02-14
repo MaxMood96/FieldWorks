@@ -49,7 +49,7 @@ namespace SIL.FieldWorks.XWorks
 			this.MinimumSize = new Size(m_grpConfigurationManagement.Width + 3, manageConfigs_treeDetailButton_split.Height);
 
 			m_helpTopicProvider = propertyTable.GetValue<IHelpTopicProvider>("HelpTopicProvider");
-			m_helpProvider = new HelpProvider { HelpNamespace = m_helpTopicProvider.HelpFile };
+			m_helpProvider = new FlexHelpProvider { HelpNamespace = m_helpTopicProvider.HelpFile };
 			m_helpProvider.SetHelpKeyword(this, m_helpTopicProvider.GetHelpString(HelpTopic));
 			m_helpProvider.SetHelpNavigator(this, HelpNavigator.Topic);
 			m_helpProvider.SetShowHelp(this, true);
@@ -230,28 +230,13 @@ namespace SIL.FieldWorks.XWorks
 			return childNode;
 		}
 
-		private static bool DoesGeckoElementOriginateFromConfigNode(ConfigurableDictionaryNode configNode, GeckoElement element,
-			ConfigurableDictionaryNode topLevelNode)
-		{
-			Guid dummyGuid;
-			GeckoElement dummyElement;
-			var classListForGeckoElement = XhtmlDocView.GetClassListFromGeckoElement(element, out dummyGuid, out dummyElement);
-			classListForGeckoElement.RemoveAt(0); // don't need the top level class
-			var nodeToMatch = DictionaryConfigurationController.FindConfigNode(topLevelNode, classListForGeckoElement);
-			return Equals(nodeToMatch, configNode);
-		}
-
 		private static IEnumerable<GeckoElement> FindMatchingSpans(ConfigurableDictionaryNode selectedNode, GeckoElement parent,
 			ConfigurableDictionaryNode topLevelNode, LcmCache cache)
 		{
 			var elements = new List<GeckoElement>();
-			var desiredClass = CssGenerator.GetClassAttributeForConfig(selectedNode);
-			if (ConfiguredLcmGenerator.IsCollectionNode(selectedNode, cache))
-				desiredClass = CssGenerator.GetClassAttributeForCollectionItem(selectedNode);
 			foreach (var span in parent.GetElementsByTagName("span"))
 			{
-				if (span.GetAttribute("class") != null && span.GetAttribute("class").Split(' ')[0] == desiredClass &&
-					DoesGeckoElementOriginateFromConfigNode(selectedNode, span, topLevelNode))
+				if (span.GetAttribute("nodeId") != null && span.GetAttribute("nodeId").Equals($"{selectedNode.GetHashCode()}"))
 				{
 					elements.Add(span);
 				}

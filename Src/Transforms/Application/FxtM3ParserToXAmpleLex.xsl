@@ -24,6 +24,7 @@ Preamble
 	<xsl:key name="InflMsaID" match="MoInflAffMsa" use="@Id"/>
 	<xsl:key name="UnclassifiedMsaID" match="MoUnclassifiedAffixMsa" use="@Id"/>
 	<xsl:key name="LexEntryID" match="LexEntry" use="@Id"/>
+	<xsl:key name="LexEntryInflTypes" match="LexEntryInflType" use="@Id"/>
 	<xsl:key name="LexEntryInflTypeSlots" match="LexEntryInflType/Slots" use="@dst"/>
 	<xsl:key name="LexSenseID" match="LexSense" use="@Id"/>
 	<xsl:key name="MorphTypeID" match="MoMorphType" use="@Id"/>
@@ -46,12 +47,9 @@ Preamble
 	<xsl:variable name="MoInflAffMsas" select="/M3Dump/Lexicon/MorphoSyntaxAnalyses/MoInflAffMsa"/>
 	<xsl:variable name="MoDerivAffMsas" select="/M3Dump/Lexicon/MorphoSyntaxAnalyses/MoDerivAffMsa"/>
 	<xsl:variable name="MoUnclassifiedAffixMsas" select="/M3Dump/Lexicon/MorphoSyntaxAnalyses/MoUnclassifiedAffixMsa"/>
-	<xsl:variable name="MoAffixAllomorphs" select="/M3Dump/Lexicon/Allomorphs/MoAffixAllomorph"/>
 	<xsl:variable name="MoStemAllomorphs" select="/M3Dump/Lexicon/Allomorphs//MoStemAllomorph"/>
 	<xsl:variable name="CompoundRules" select="/M3Dump/CompoundRules/MoEndoCompound | /M3Dump/CompoundRules/MoExoCompound"/>
-	<xsl:variable name="PartsOfSpeech" select="/M3Dump/PartsOfSpeech/PartOfSpeech"/>
 	<!-- included stylesheets (i.e. things common to other style sheets) -->
-	<xsl:include href="MorphTypeGuids.xsl"/>
 	<xsl:include href="XAmpleTemplateVariables.xsl"/>
 	<xsl:include href="FxtM3ParserCommon.xsl"/>
 	<!-- following is used for writing inflection class MECs -->
@@ -132,29 +130,70 @@ Main template
 							<xsl:variable name="lexEntryRef" select="."/>
 							<xsl:for-each select="ComponentLexeme">
 								<xsl:variable name="componentLexEntry" select="key('LexEntryID',@dst)"/>
-								<xsl:choose>
+									<xsl:choose>
 									<xsl:when test="$componentLexEntry">
 										<xsl:for-each select="$componentLexEntry/MorphoSyntaxAnalysis">
-											<xsl:variable name="stemMsa" select="key('StemMsaID',@dst)"/>
-											<xsl:call-template name="OutputVariantEntry">
-												<xsl:with-param name="lexEntryRef" select="$lexEntryRef"/>
-												<xsl:with-param name="lexEntry" select="$lexEntry"/>
-												<xsl:with-param name="componentLexEntry" select="$componentLexEntry"/>
-												<xsl:with-param name="sVariantOfGloss" select="key('LexSenseID',$componentLexEntry/Sense[1]/@dst)/Gloss"/>
-												<xsl:with-param name="stemMsa" select="$stemMsa"/>
-											</xsl:call-template>
+											<xsl:if test="$lexEntryRef/LexEntryType">
+												<xsl:text>
+
+\lx </xsl:text>
+												<xsl:variable name="stemMsa" select="key('StemMsaID',@dst)"/>
+												<xsl:variable name="derivMsa" select="key('DerivMsaID',@dst)"/>
+												<xsl:variable name="inflMsa" select="key('InflMsaID',@dst)"/>
+												<xsl:variable name="unclassifiedMsa" select="key('UnclassifiedMsaID',@dst)"/>
+												<xsl:choose>
+													<xsl:when test="$derivMsa">
+														<xsl:value-of select="$derivMsa/@Id"/>
+														<xsl:apply-templates select="key('DerivMsaID', $derivMsa/@Id)">
+															<xsl:with-param name="lexEntry" select="$lexEntry"/>
+															<xsl:with-param name="allos" select="$lexEntry/AlternateForms | $lexEntry/LexemeForm"/>
+															<xsl:with-param name="gloss" select="key('LexSenseID',../Sense[1]/@dst)/Gloss"/>
+														</xsl:apply-templates>
+													</xsl:when>
+													<xsl:when test="$inflMsa">
+														<xsl:value-of select="$inflMsa/@Id"/>
+														<xsl:apply-templates select="key('InflMsaID', $inflMsa/@Id)">
+															<xsl:with-param name="lexEntry" select="$lexEntry"/>
+															<xsl:with-param name="allos" select="$lexEntry/AlternateForms | $lexEntry/LexemeForm"/>
+															<xsl:with-param name="gloss" select="key('LexSenseID',../Sense[1]/@dst)/Gloss"/>
+														</xsl:apply-templates>
+													</xsl:when>
+													<xsl:when test="$unclassifiedMsa">
+														<xsl:value-of select="$unclassifiedMsa/@Id"/>
+														<xsl:apply-templates select="key('UnclassifiedMsaID', $derivMsa/@Id)">
+															<xsl:with-param name="lexEntry" select="$lexEntry"/>
+															<xsl:with-param name="allos" select="$lexEntry/AlternateForms | $lexEntry/LexemeForm"/>
+															<xsl:with-param name="gloss" select="key('LexSenseID',../Sense[1]/@dst)/Gloss"/>
+														</xsl:apply-templates>
+													</xsl:when>
+													<xsl:otherwise>
+														<xsl:call-template name="OutputVariantEntry">
+															<xsl:with-param name="lexEntryRef" select="$lexEntryRef"/>
+															<xsl:with-param name="lexEntry" select="$lexEntry"/>
+															<xsl:with-param name="componentLexEntry" select="$componentLexEntry"/>
+															<xsl:with-param name="sVariantOfGloss" select="key('LexSenseID',$componentLexEntry/Sense[1]/@dst)/Gloss"/>
+															<xsl:with-param name="stemMsa" select="$stemMsa"/>
+														</xsl:call-template>
+													</xsl:otherwise>
+												</xsl:choose>
+											</xsl:if>
 										</xsl:for-each>
 									</xsl:when>
 									<xsl:otherwise>
 										<!-- the component must refer to a sense -->
 										<xsl:variable name="componentSense" select="key('LexSenseID',@dst)"/>
 										<xsl:variable name="stemMsa" select="key('StemMsaID',$componentSense/@Msa)"/>
-										<xsl:call-template name="OutputVariantEntry">
-											<xsl:with-param name="lexEntryRef" select="$lexEntryRef"/>
-											<xsl:with-param name="lexEntry" select="$lexEntry"/>
-											<xsl:with-param name="sVariantOfGloss" select="$componentSense/Gloss"/>
-											<xsl:with-param name="stemMsa" select="$stemMsa"/>
-										</xsl:call-template>
+										<xsl:if test="$lexEntryRef/LexEntryType">
+											<xsl:text>
+
+\lx </xsl:text>
+											<xsl:call-template name="OutputVariantEntry">
+												<xsl:with-param name="lexEntryRef" select="$lexEntryRef"/>
+												<xsl:with-param name="lexEntry" select="$lexEntry"/>
+												<xsl:with-param name="sVariantOfGloss" select="$componentSense/Gloss"/>
+												<xsl:with-param name="stemMsa" select="$stemMsa"/>
+											</xsl:call-template>
+										</xsl:if>
 									</xsl:otherwise>
 								</xsl:choose>
 							</xsl:for-each>
@@ -466,10 +505,26 @@ Main template
 				<xsl:with-param name="gloss" select="$gloss"/>
 			</xsl:call-template>
 			<xsl:text>
-\c</xsl:text>
+\c </xsl:text>
 			<xsl:choose>
-				<xsl:when test="contains($sTypes,'Particle')"> Prt</xsl:when>
-				<xsl:otherwise> W</xsl:otherwise>
+				<xsl:when test="contains($sTypes,'Particle')">Prt</xsl:when>
+				<xsl:when test="$bSuffixingOnly='N'">
+					<xsl:text>W</xsl:text>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:variable name="posid" select="$stemMsa/@PartOfSpeech"/>
+					<xsl:choose>
+						<xsl:when test="$posid!=0">
+							<xsl:text>pos</xsl:text>
+							<xsl:call-template name="GetTopLevelPOSId">
+								<xsl:with-param name="pos" select="key('POSID', $posid)"/>
+							</xsl:call-template>
+						</xsl:when>
+						<xsl:otherwise>
+							<xsl:text>W</xsl:text>
+						</xsl:otherwise>
+					</xsl:choose>
+				</xsl:otherwise>
 			</xsl:choose>
 			<xsl:text>
 \wc </xsl:text>
@@ -1090,8 +1145,12 @@ DoDerivAffix
 		<xsl:call-template name="Gloss">
 			<xsl:with-param name="gloss" select="$gloss"/>
 		</xsl:call-template>
-\c W/W
-\o <xsl:if test="contains($sTypes, 'prefix')">
+		<xsl:call-template name="DoDerivAffixCategoryMapping">
+			<xsl:with-param name="derivMsa" select="$derivMsa"/>
+		</xsl:call-template>
+		<xsl:text>
+\o </xsl:text>
+		<xsl:if test="contains($sTypes, 'prefix')">
 			<xsl:text>-</xsl:text>
 		</xsl:if>
 		<xsl:text>1</xsl:text>
@@ -1165,6 +1224,55 @@ DoDerivAffix
 	</xsl:template>
 	<!--
 		- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+		DoDerivAffixCategoryMapping
+		Produce XAmaple category mapping
+		Parameters: derivMsa = msa node
+		- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	-->
+	<xsl:template name="DoDerivAffixCategoryMapping">
+		<xsl:param name="derivMsa"/>
+		<xsl:text>&#xa;\c </xsl:text>
+		<xsl:choose>
+			<xsl:when test="$bSuffixingOnly='N'">
+				<xsl:text>W/W</xsl:text>
+			</xsl:when>
+			<xsl:otherwise>
+				<xsl:variable name="fromPosId" select="$derivMsa/@FromPartOfSpeech"/>
+				<xsl:variable name="toPosId" select="$derivMsa/@ToPartOfSpeech"/>
+				<xsl:choose>
+					<xsl:when test="$fromPosId">
+						<xsl:variable name="sPos">
+							<xsl:text>pos</xsl:text>
+							<xsl:call-template name="GetTopLevelPOSId">
+								<xsl:with-param name="pos" select="key('POSID', $fromPosId)"/>
+							</xsl:call-template>
+						</xsl:variable>
+						<xsl:value-of select="$sPos"/>
+					</xsl:when>
+					<xsl:otherwise>
+						<xsl:text>W</xsl:text>
+					</xsl:otherwise>
+				</xsl:choose>
+				<xsl:text>/</xsl:text>
+				<xsl:choose>
+					<xsl:when test="$toPosId">
+						<xsl:variable name="sPos">
+							<xsl:text>pos</xsl:text>
+							<xsl:call-template name="GetTopLevelPOSId">
+								<xsl:with-param name="pos" select="key('POSID', $toPosId)"/>
+							</xsl:call-template>
+						</xsl:variable>
+						<xsl:value-of select="$sPos"/>
+					</xsl:when>
+					<xsl:otherwise>
+						<xsl:text>W</xsl:text>
+					</xsl:otherwise>
+				</xsl:choose>
+			</xsl:otherwise>
+		</xsl:choose>
+	</xsl:template>
+	<!--
+		- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 		DoInflAffix
 		Generate an inflectional affix
 		Parameters: inflMsa = msa node
@@ -1183,8 +1291,10 @@ DoDerivAffix
 		<xsl:call-template name="Gloss">
 			<xsl:with-param name="gloss" select="$gloss"/>
 		</xsl:call-template>
+		<xsl:call-template name="DoInflAffixCategoryMapping">
+			<xsl:with-param name="posid" select="$inflMsa/@PartOfSpeech"/>
+		</xsl:call-template>
 		<xsl:text>
-\c W/W
 \o </xsl:text>
 		<xsl:choose>
 			<xsl:when test="$Slot">
@@ -1330,6 +1440,36 @@ DoDerivAffix
 			<xsl:with-param name="fs" select="$inflMsa/InflectionFeatures/FsFeatStruc"/>
 			<xsl:with-param name="posid" select="$inflMsa/@PartOfSpeech"/>
 		</xsl:call-template>
+	</xsl:template>
+	<!--
+		- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+		DoInflAffixCategoryMapping
+		Produce XAmaple category mapping
+		Parameters: posid = Part of Speech id
+		- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	-->
+	<xsl:template name="DoInflAffixCategoryMapping">
+		<xsl:param name="posid"/>
+		<xsl:text>&#xa;\c </xsl:text>
+		<xsl:choose>
+			<xsl:when test="$bSuffixingOnly='N'">
+				<xsl:text>W/W</xsl:text>
+			</xsl:when>
+			<xsl:when test="$posid">
+				<xsl:variable name="sPos">
+					<xsl:text>pos</xsl:text>
+					<xsl:call-template name="GetTopLevelPOSId">
+						<xsl:with-param name="pos" select="key('POSID', $posid)"/>
+					</xsl:call-template>
+				</xsl:variable>
+				<xsl:value-of select="$sPos"/>
+				<xsl:text>/</xsl:text>
+				<xsl:value-of select="$sPos"/>
+			</xsl:when>
+			<xsl:otherwise>
+				<xsl:text>W/W</xsl:text>
+			</xsl:otherwise>
+		</xsl:choose>
 	</xsl:template>
 	<!--
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2026,14 +2166,17 @@ InflClass
 		<xsl:param name="lexEntry"/>
 		<xsl:param name="sVariantOfGloss"/>
 		<xsl:param name="stemMsa"/>
-		<xsl:if test="$lexEntryRef/LexEntryType">
-			<xsl:text>
-
-\lx </xsl:text>
-			<xsl:call-template name="IdOfVariantEntry">
-				<xsl:with-param name="lexEntry" select="$lexEntry"/>
-				<xsl:with-param name="lexEntryRef" select="$lexEntryRef"/>
-			</xsl:call-template>
+			<xsl:choose>
+				<xsl:when test="key('LexEntryInflTypes',$lexEntryRef/LexEntryType/@dst)">
+					<xsl:call-template name="IdOfVariantEntry">
+						<xsl:with-param name="lexEntry" select="$lexEntry"/>
+						<xsl:with-param name="lexEntryRef" select="$lexEntryRef"/>
+					</xsl:call-template>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:value-of select="$stemMsa/@Id"/>
+				</xsl:otherwise>
+			</xsl:choose>
 			<xsl:variable name="gloss">
 				<xsl:call-template name="GlossOfVariant">
 					<xsl:with-param name="lexEntryRef" select="$lexEntryRef"/>
@@ -2070,7 +2213,6 @@ InflClass
 				</xsl:if>
 			</xsl:for-each>
 			<xsl:text>&#xa;</xsl:text>
-		</xsl:if>
 	</xsl:template>
 	<!--
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

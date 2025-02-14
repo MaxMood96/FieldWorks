@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2018 SIL International
+// Copyright (c) 2015-2022 SIL International
 // This software is licensed under the LGPL, version 2.1 or later
 // (http://www.gnu.org/licenses/lgpl-2.1.html)
 
@@ -13,10 +13,12 @@ using SIL.FieldWorks.Common.FwUtils;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Xml;
 using DesktopAnalytics;
 using Gecko;
 using Gecko.DOM;
+using SIL.LCModel.Infrastructure;
 using SIL.LCModel.Utils;
 using Directory = System.IO.Directory;
 using XCore;
@@ -52,7 +54,7 @@ namespace SIL.FieldWorks.IText
 			AccessibleName = GetType().Name;
 
 			m_helpTopicProvider = helpTopicProvider;
-			helpProvider = new HelpProvider();
+			helpProvider = new FlexHelpProvider();
 			helpProvider.HelpNamespace = m_helpTopicProvider.HelpFile;
 			helpProvider.SetHelpKeyword(this, m_helpTopicProvider.GetHelpString(s_helpTopic));
 			helpProvider.SetHelpNavigator(this, HelpNavigator.Topic);
@@ -115,7 +117,7 @@ namespace SIL.FieldWorks.IText
 			if (htmlPath == null)
 				throw new ArgumentNullException();
 
-			using (var fileStream = new StreamWriter(htmlPath))
+			using (var fileStream = new StreamWriter(htmlPath, false, Encoding.UTF8))
 			{
 				SavePublishedHtmlAndCss(fileStream);
 
@@ -382,9 +384,9 @@ namespace SIL.FieldWorks.IText
 							? row.FirstSpec
 							: choices.CreateSpec(row.Flid, 0);
 						var wsItems = new List<WsComboItem>();
-						ColumnConfigureDialog.AddWritingSystemsToCombo(cache,wsItems, interlinSpec.ComboContent);
+						ColumnConfigureDialog.AddWritingSystemsToCombo(cache, wsItems, interlinSpec.ComboContent);
 
-						if (wsItems.Exists(wsItem => wsItem.Id == column.Id))
+						if (RowNeedsCheckbox(cache, interlinSpec, wsItems, column))
 						{
 							var id = row.Flid + "%" + column.WritingSystem;
 							GenerateCheckbox(htmlWriter, choices, id, column.WritingSystemType);
@@ -394,6 +396,34 @@ namespace SIL.FieldWorks.IText
 							GenerateCheckbox(htmlWriter, choices, "", column.WritingSystemType, true);
 						}
 					}
+			}
+
+			private static bool RowNeedsCheckbox(LcmCache lcmCache, InterlinLineSpec interlinSpec,
+				List<WsComboItem> wsItems, WsComboItem column)
+			{
+				if (lcmCache.MetaDataCacheAccessor is IFwMetaDataCacheManaged mdc)
+				{
+					if (mdc.FieldExists(interlinSpec.Flid) && mdc.IsCustom(interlinSpec.Flid))
+					{
+						string workingWs = column.WritingSystemType;
+						if (workingWs == "both")
+						{
+							int customWS = mdc.GetFieldWs(interlinSpec.Flid);
+							if (customWS == WritingSystemServices.kwsVern)
+								workingWs = "vernacular";
+							else
+								workingWs = "analysis";
+						}
+
+						return
+							((workingWs == "analysis" && column.Id == lcmCache.LangProject.DefaultAnalysisWritingSystem.Id) ||
+							(workingWs == "vernacular" && column.Id == lcmCache.LangProject.DefaultVernacularWritingSystem.Id)) &&
+							wsItems.Exists(wsItem => wsItem.Id == column.Id);
+					}
+					return wsItems.Exists(wsItem => wsItem.Id == column.Id);
+				}
+
+				throw new ApplicationException("A metadata cache is expected to exist here to check for custom fields.");
 			}
 
 			/// <summary>

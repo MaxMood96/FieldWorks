@@ -4778,7 +4778,7 @@ void VwParagraphBox::ReplaceStrings(IVwGraphics * pvg, int itssMin, int itssLim,
 		CompareSourceStrings(Source(), pvpboxRep->Source(), itssMin,
 			&ichMinDiff, &ichLimDiff);
 
-		if (ichMinDiff == -1 && ichMinDiff == -1)
+		if (ichMinDiff == -1 && ichLimDiff == -1)
 		{
 			// Do the actual change anyway. This is not expensive and it protects against any
 			// subtle thing that CompareSourceStrings may have missed. One I (JohnT) know it
@@ -4950,8 +4950,9 @@ void VwParagraphBox::ReplaceStrings(IVwGraphics * pvg, int itssMin, int itssLim,
 		DoPartialLayout(pvg, pboxStartReplace, cLinesToSave, dyStartReplace, dyPrevDescent,
 			ichMinDiff, ichLimDiff, cchLenDiff);
 
-		// If height and width didn't change, no need to recompute containers.
-		if (NoSignificantSizeChange(dysHeight, dxsWidth))
+		// If height and width didn't change, and characters were not deleted
+		// there is no need to recompute containers.
+		if (NoSignificantSizeChange(dysHeight, dxsWidth) && cchLenDiff >= 0)
 		{
 			if (dxsWidth < m_dxsWidth)
 			{
@@ -5839,7 +5840,10 @@ void VwParagraphBox::SetHeightAndAdjustChildren(IVwGraphics * pvg, ParaBuilder *
 	else
 	{
 		int dyAscent;
-		int ich = max(Source()->CchRen() - 1, 0);
+		int cchRen = Source()->CchRen();
+		// Allow ich values that are negative.  This is not the final value, it gets combined
+		// with DiscardedInitialRen. LT-17535
+		int ich = cchRen <= 0 ? cchRen : cchRen - 1;
 		LgCharRenderProps chrp;
 		int ichMinRun, ichLimRun; // dummies
 		CheckHr(Source()->GetCharProps(ich, &chrp, &ichMinRun, &ichLimRun));
@@ -6588,7 +6592,7 @@ StrUni VwParagraphBox::GetBulNumString(IVwGraphics * pvg, COLORREF * pclrUnder, 
 		int tpt = *pchProps++;
 		if (tpt == ktptFontFamily)
 		{
-			u_strcpy(chrp.szFaceName, pchProps);
+			u_strcpy(reinterpret_cast<UChar*>(chrp.szFaceName), reinterpret_cast<const UChar*>(pchProps));
 			break; // no more properties
 		}
 		// It must be a numeric property
@@ -6648,7 +6652,7 @@ StrUni VwParagraphBox::GetBulNumString(IVwGraphics * pvg, COLORREF * pclrUnder, 
 		{
 			// bullet
 			static OleStringLiteral fontName(L"Quivira");
-			u_strcpy(chrp.szFaceName, fontName); // only font that works for bullets
+			u_strcpy(reinterpret_cast<UChar *>(chrp.szFaceName), fontName); // only font that works for bullets
 			CheckHr(pvg->SetupGraphics(&chrp));
 			StrUni stuText;
 			stuText.Format(L"%c", s_rgszBulletOptions[vbn - kvbnBulletBase]);
@@ -6714,7 +6718,7 @@ LArabic:
 	}
 	StrUni stuFaceName(chrp.szFaceName);
 	stuFaceName = FwStyledText::FontMarkupToFontName(stuFaceName);
-	u_strcpy(chrp.szFaceName, stuFaceName.Chars());
+	u_strcpy(reinterpret_cast<UChar*>(chrp.szFaceName), reinterpret_cast<const UChar *>(stuFaceName.Chars()));
 	// If we drop out of the switch, as opposed to returning, we have a number in
 	// rgchNum. Now we need to combine it with following and preceding text, if any.
 	CheckHr(pvg->SetupGraphics(&chrp));
@@ -8570,7 +8574,7 @@ public:
 		UnicodeString ucOutput = norm->normalize(ucInput, uerr);
 		if (U_FAILURE(uerr)) // may get warnings, like not terminated.
 			return; // give up if we can't normalize.
-		word.Assign(ucOutput.getBuffer(), ucOutput.length());
+		word.Assign(reinterpret_cast<const wchar *>(ucOutput.getBuffer()), ucOutput.length());
 
 		SmartBstr sbstrWsId;
 		ILgWritingSystemPtr qwse;

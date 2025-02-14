@@ -113,26 +113,24 @@ namespace SIL.FieldWorks.IText
 			// We can't remove the Word line.
 			string msg;
 			Assert.IsFalse(choices.OkToRemove(choices.EnabledLineSpecs[0], out msg));
-			Assert.IsNotNull(msg);
-			// Add another word line and make sure we can remove one of them.
+			Assert.That(msg, Is.Not.Null);
+
+			// Cannot add duplicates.
+			var beforeCount = choices.AllLineSpecs.Count;
 			choices.Add(InterlinLineChoices.kflidWord);
-			Assert.AreEqual(InterlinLineChoices.kflidWord, choices.EnabledLineSpecs[1].Flid);
-			Assert.IsTrue(choices.OkToRemove(choices.EnabledLineSpecs[0], out msg));
-			Assert.IsNull(msg);
-			choices.Remove(choices.EnabledLineSpecs[0]);
-			Assert.AreEqual(InterlinLineChoices.kflidWord, choices.EnabledLineSpecs[0].Flid);
+			Assert.AreEqual(beforeCount, choices.AllLineSpecs.Count);
 
 			// Other fields can be removed freely
 			Assert.IsTrue(choices.OkToRemove(choices.EnabledLineSpecs[1], out msg));
-			Assert.IsNull(msg);
+			Assert.That(msg, Is.Null);
 			Assert.IsTrue(choices.OkToRemove(choices.EnabledLineSpecs[2], out msg));
-			Assert.IsNull(msg);
+			Assert.That(msg, Is.Null);
 			Assert.IsTrue(choices.OkToRemove(choices.EnabledLineSpecs[3], out msg));
-			Assert.IsNull(msg);
+			Assert.That(msg, Is.Null);
 			Assert.IsTrue(choices.OkToRemove(choices.EnabledLineSpecs[4], out msg));
-			Assert.IsNull(msg);
+			Assert.That(msg, Is.Null);
 			Assert.IsTrue(choices.OkToRemove(choices.EnabledLineSpecs[5], out msg));
-			Assert.IsNull(msg);
+			Assert.That(msg, Is.Null);
 
 			// Check what goes along with the morphemes line: morpheme line should be independent (LT-6043).
 			choices.Remove(choices.EnabledLineSpecs[1]);
@@ -520,6 +518,78 @@ namespace SIL.FieldWorks.IText
 			Assert.That(choices.EnabledLineSpecs[0].WritingSystem, Is.EqualTo(wsFrn));
 			Assert.That(choices.EnabledLineSpecs[5].WritingSystem, Is.EqualTo(wsEng));
 			Assert.That(choices.EnabledLineSpecs[2].WritingSystem, Is.EqualTo(wsFrn));
+		}
+
+		[Test]
+		public void AddCustomSpecsForAnalAndVern()
+		{
+			var wsManager = new WritingSystemManager();
+			CoreWritingSystemDefinition enWs;
+			wsManager.GetOrSet("en", out enWs);
+			var wsEng = enWs.Handle;
+
+			CoreWritingSystemDefinition frWs;
+			wsManager.GetOrSet("fr", out frWs);
+			var wsFrn = frWs.Handle;
+
+			using (var cFirstAnal = new CustomFieldForTest(Cache,
+				"Candy Apple Red Anal",
+				Cache.MetaDataCacheAccessor.GetClassId("Segment"),
+				WritingSystemServices.kwsAnal,
+				CellarPropertyType.String,
+				Guid.Empty))
+			using (var cFirstVern = new CustomFieldForTest(Cache,
+				"Candy Apple Red Vern",
+				Cache.MetaDataCacheAccessor.GetClassId("Segment"),
+				WritingSystemServices.kwsVern,
+				CellarPropertyType.String,
+				Guid.Empty))
+			{
+				InterlinLineChoices choices = new InterlinLineChoices(m_lp, wsFrn, wsEng);
+				choices.Add(cFirstAnal.Flid);
+				choices.Add(cFirstVern.Flid);
+				Assert.That(choices.EnabledCount, Is.EqualTo(2));
+				Assert.That(choices.EnabledLineSpecs[0].WritingSystem, Is.EqualTo(Cache.LangProject.DefaultAnalysisWritingSystem.Handle));
+				Assert.That(choices.EnabledLineSpecs[1].WritingSystem, Is.EqualTo(Cache.LangProject.DefaultVernacularWritingSystem.Handle));
+			}
+		}
+
+		[Test]
+		public void CreateSpecForCustomAlwaysUsesDefaultWS()
+		{
+			var wsManager = new WritingSystemManager();
+			CoreWritingSystemDefinition enWs;
+			wsManager.GetOrSet("en", out enWs);
+			var wsEng = enWs.Handle;
+
+			CoreWritingSystemDefinition frWs;
+			wsManager.GetOrSet("fr", out frWs);
+			var wsFrn = frWs.Handle;
+
+			CoreWritingSystemDefinition deWs;
+			wsManager.GetOrSet("de", out deWs);
+			var wsGer = deWs.Handle;
+
+			using (var cFirstAnal = new CustomFieldForTest(Cache,
+				"Candy Apple Red Anal",
+				Cache.MetaDataCacheAccessor.GetClassId("Segment"),
+				WritingSystemServices.kwsAnal,
+				CellarPropertyType.String,
+				Guid.Empty))
+			using (var cFirstVern = new CustomFieldForTest(Cache,
+				"Candy Apple Red Vern",
+				Cache.MetaDataCacheAccessor.GetClassId("Segment"),
+				WritingSystemServices.kwsVern,
+				CellarPropertyType.String,
+				Guid.Empty))
+			{
+				InterlinLineChoices choices = new InterlinLineChoices(m_lp, wsFrn, wsEng);
+				InterlinLineSpec analChoice = choices.CreateSpec(cFirstAnal.Flid, wsGer);
+				InterlinLineSpec vernChoice = choices.CreateSpec(cFirstVern.Flid, wsGer);
+
+				Assert.That(analChoice.WritingSystem, Is.EqualTo(Cache.LangProject.DefaultAnalysisWritingSystem.Handle));
+				Assert.That(vernChoice.WritingSystem, Is.EqualTo(Cache.LangProject.DefaultVernacularWritingSystem.Handle));
+			}
 		}
 
 		[Test]

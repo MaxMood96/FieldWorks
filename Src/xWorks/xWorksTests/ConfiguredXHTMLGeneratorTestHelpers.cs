@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2017 SIL International
+// Copyright (c) 2014-2023 SIL International
 // This software is licensed under the LGPL, version 2.1 or later
 // (http://www.gnu.org/licenses/lgpl-2.1.html)
 
@@ -16,6 +16,7 @@ using SIL.LCModel;
 using SIL.LCModel.DomainServices;
 using SIL.LCModel.Utils;
 using XCore;
+using SIL.FieldWorks.Common.FwUtils;
 
 namespace SIL.FieldWorks.XWorks
 {
@@ -220,7 +221,7 @@ namespace SIL.FieldWorks.XWorks
 		internal static ILexEntryRef CreateVariantForm(LcmCache cache, IVariantComponentLexeme main, ILexEntry variantForm, string type = TestVariantName)
 		{
 			var owningList = cache.LangProject.LexDbOA.VariantEntryTypesOA;
-			Assert.IsNotNull(owningList, "No VariantEntryTypes property on Lexicon object.");
+			Assert.That(owningList, Is.Not.Null, "No VariantEntryTypes property on Lexicon object.");
 			var varType = owningList.ReallyReallyAllPossibilities.LastOrDefault(poss => poss.Name.AnalysisDefaultWritingSystem.Text == type) as ILexEntryType;
 			if (varType == null && type != null) // if this type doesn't exist, create it
 			{
@@ -348,6 +349,12 @@ namespace SIL.FieldWorks.XWorks
 			entry.CitationForm.set_String(wsId, TsStringUtils.MakeString(headword, wsId));
 		}
 
+		internal static void AddLexemeFormToEntry(ILexEntry entry, string lexemeForm, LcmCache cache)
+		{
+			entry.LexemeFormOA = cache.ServiceLocator.GetInstance<IMoAffixAllomorphFactory>().Create();
+			entry.LexemeFormOA.Form.SetVernacularDefaultWritingSystem(lexemeForm);
+		}
+
 		internal static ILexPronunciation AddPronunciationToEntry(ILexEntry entry, string content, int wsId, LcmCache cache)
 		{
 			var pronunciation = cache.ServiceLocator.GetInstance<ILexPronunciationFactory>().Create();
@@ -374,20 +381,25 @@ namespace SIL.FieldWorks.XWorks
 
 		private void AddSenseAndTwoSubsensesToEntry(ICmObject entryOrSense, string gloss)
 		{
-			var senseFactory = Cache.ServiceLocator.GetInstance<ILexSenseFactory>();
+			AddSenseAndTwoSubsensesToEntry(entryOrSense, gloss, Cache, m_wsEn);
+		}
+
+		internal static void AddSenseAndTwoSubsensesToEntry(ICmObject entryOrSense, string gloss, LcmCache cache, int ws)
+		{
+			var senseFactory = cache.ServiceLocator.GetInstance<ILexSenseFactory>();
 			var sense = senseFactory.Create();
 			var entry = entryOrSense as ILexEntry;
 			if (entry != null)
 				entry.SensesOS.Add(sense);
 			else
 				((ILexSense)entryOrSense).SensesOS.Add(sense);
-			sense.Gloss.set_String(m_wsEn, TsStringUtils.MakeString(gloss, m_wsEn));
+			sense.Gloss.set_String(ws, TsStringUtils.MakeString(gloss, ws));
 			var subSensesOne = senseFactory.Create();
 			sense.SensesOS.Add(subSensesOne);
-			subSensesOne.Gloss.set_String(m_wsEn, TsStringUtils.MakeString(gloss + "2.1", m_wsEn));
+			subSensesOne.Gloss.set_String(ws, TsStringUtils.MakeString(gloss + "2.1", ws));
 			var subSensesTwo = senseFactory.Create();
 			sense.SensesOS.Add(subSensesTwo);
-			subSensesTwo.Gloss.set_String(m_wsEn, TsStringUtils.MakeString(gloss + "2.2", m_wsEn));
+			subSensesTwo.Gloss.set_String(ws, TsStringUtils.MakeString(gloss + "2.2", ws));
 		}
 
 		private void AddSingleSubSenseToSense(string gloss, ILexSense sense)
@@ -435,7 +447,33 @@ namespace SIL.FieldWorks.XWorks
 			return morph;
 		}
 
-		private static IStText CreateMultiParaText(string content, LcmCache cache)
+		internal static ICmPicture CreatePicture(LcmCache cache, bool exists = true, string caption = "caption", string ws = "en")
+		{
+			var pic = cache.ServiceLocator.GetInstance<ICmPictureFactory>().Create();
+			if (caption != null)
+			{
+				var wsHandle = cache.WritingSystemFactory.GetWsFromStr(ws);
+				pic.Caption.set_String(wsHandle, TsStringUtils.MakeString(caption, wsHandle));
+			}
+			var file = cache.ServiceLocator.GetInstance<ICmFileFactory>().Create();
+			if (cache.LangProject.MediaOC.Any())
+			{
+				cache.LangProject.MediaOC.First().FilesOC.Add(file);
+			}
+			else
+			{
+				var folder = cache.ServiceLocator.GetInstance<ICmFolderFactory>().Create();
+				cache.LangProject.MediaOC.Add(folder);
+				folder.FilesOC.Add(file);
+			}
+			file.InternalPath = exists
+				? Path.Combine(FwDirectoryFinder.SourceDirectory, "xWorks/xWorksTests/TestData/ImageFiles/test_auth_copy_license.jpg")
+				: "does/not/exist.jpg";
+			pic.PictureFileRA = file;
+			return pic;
+		}
+
+		internal static IStText CreateMultiParaText(string content, LcmCache cache)
 		{
 			var text = cache.ServiceLocator.GetInstance<ITextFactory>().Create();
 			//cache.LangProject.
@@ -677,6 +715,14 @@ namespace SIL.FieldWorks.XWorks
 	internal class TestPictureClass
 	{
 		public ILcmList<ICmPicture> Pictures { get; set; }
+	}
+
+	internal static class TestExtensionMethod
+	{
+		static string Creator(this TestPictureClass extend)
+		{
+			return "bob";
+		}
 	}
 	#endregion
 }

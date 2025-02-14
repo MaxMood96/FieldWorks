@@ -11,14 +11,15 @@ using System.Windows.Forms;
 using System.Xml;
 using System.Xml.Schema;
 using NUnit.Framework;
+using SIL.FieldWorks.Common.FwUtils;
+using SIL.FieldWorks.IText.FlexInterlinModel;
 using SIL.LCModel.Core.Text;
 using SIL.LCModel.Core.WritingSystems;
 using SIL.LCModel.Core.KernelInterfaces;
-using SIL.FieldWorks.Common.FwUtils;
 using SIL.LCModel;
 using SIL.LCModel.Infrastructure;
-using SIL.FieldWorks.IText.FlexInterlinModel;
 using SIL.LCModel.Utils;
+using SIL.PlatformUtilities;
 
 namespace SIL.FieldWorks.IText
 {
@@ -144,7 +145,7 @@ namespace SIL.FieldWorks.IText
 			XmlReader xmlReader = GetXmlReaderForTest(xml);
 			var ex = Assert.Throws<XmlSchemaValidationException>(() => ReadXmlForValidation(xmlReader));
 			// TODO-Linux: The message on Mono doesn't state the failing attribute
-			if (!MiscUtils.IsMono)
+			if (!Platform.IsMono)
 				Assert.That(ex.Message, Is.EqualTo("The 'scrSectionType' attribute is invalid - The value 'invalid' is invalid according to its datatype 'scrSectionTypes' - The Enumeration constraint failed."));
 		}
 
@@ -171,7 +172,7 @@ namespace SIL.FieldWorks.IText
 			XmlReader xmlReader = GetXmlReaderForTest(xml);
 			var ex = Assert.Throws<XmlSchemaValidationException>(() => ReadXmlForValidation(xmlReader));
 			// TODO-Linux: The message on Mono doesn't state the failing attribute
-			if (!MiscUtils.IsMono)
+			if (!Platform.IsMono)
 				Assert.That(ex.Message, Is.EqualTo("The 'scrSectionType' attribute is invalid - The value 'invalid' is invalid according to its datatype 'scrSectionTypes' - The Enumeration constraint failed."));
 		}
 
@@ -197,7 +198,7 @@ namespace SIL.FieldWorks.IText
 			XmlReader xmlReader = GetXmlReaderForTest(xml);
 			var ex = Assert.Throws<XmlSchemaValidationException>(() => ReadXmlForValidation(xmlReader));
 			// TODO-Linux: The message on Mono doesn't state the failing attribute
-			if (!MiscUtils.IsMono)
+			if (!Platform.IsMono)
 				Assert.That(ex.Message, Is.EqualTo("The required attribute 'chapter' is missing."));
 		}
 
@@ -211,7 +212,7 @@ namespace SIL.FieldWorks.IText
 			XmlReader xmlReader = GetXmlReaderForTest(xml);
 			var ex = Assert.Throws<XmlSchemaValidationException>(() => ReadXmlForValidation(xmlReader));
 			// TODO-Linux: The message on Mono doesn't state the failing attribute
-			if (!MiscUtils.IsMono)
+			if (!Platform.IsMono)
 				Assert.That(ex.Message, Is.EqualTo("The required attribute 'verse' is missing."));
 		}
 
@@ -225,7 +226,7 @@ namespace SIL.FieldWorks.IText
 			XmlReader xmlReader = GetXmlReaderForTest(xml);
 			var ex = Assert.Throws<XmlSchemaValidationException>(() => ReadXmlForValidation(xmlReader));
 			// TODO-Linux: The message on Mono doesn't state the failing attribute
-			if (!MiscUtils.IsMono)
+			if (!Platform.IsMono)
 				Assert.That(ex.Message, Is.EqualTo("The element 'words' has invalid child element 'scrMilestone'. List of possible elements expected: 'word'."));
 		}
 
@@ -239,7 +240,7 @@ namespace SIL.FieldWorks.IText
 			XmlReader xmlReader = GetXmlReaderForTest(xml);
 			var ex = Assert.Throws<XmlSchemaValidationException>(() => ReadXmlForValidation(xmlReader));
 			// TODO-Linux: The message on Mono doesn't state the failing attribute
-			if (!MiscUtils.IsMono)
+			if (!Platform.IsMono)
 				Assert.That(ex.Message, Is.EqualTo("The 'chapter' attribute is invalid - The value 'one' is invalid according to its datatype 'http://www.w3.org/2001/XMLSchema:integer' - The string 'one' is not a valid Integer value."));
 		}
 
@@ -253,7 +254,7 @@ namespace SIL.FieldWorks.IText
 			XmlReader xmlReader = GetXmlReaderForTest(xml);
 			var ex = Assert.Throws<XmlSchemaValidationException>(() => ReadXmlForValidation(xmlReader));
 			// TODO-Linux: The message on Mono doesn't state the failing attribute
-			if (!MiscUtils.IsMono)
+			if (!Platform.IsMono)
 				Assert.That(ex.Message, Is.EqualTo("The 'verse' attribute is invalid - The value 'one' is invalid according to its datatype 'http://www.w3.org/2001/XMLSchema:integer' - The string 'one' is not a valid Integer value."));
 		}
 
@@ -293,7 +294,7 @@ namespace SIL.FieldWorks.IText
 			XmlReader xmlReader = GetXmlReaderForTest(xml);
 			var ex = Assert.Throws<XmlSchemaValidationException>(() => ReadXmlForValidation(xmlReader));
 			// TODO-Linux: The message on Mono doesn't state the failing attribute
-			if (!MiscUtils.IsMono)
+			if (!Platform.IsMono)
 				Assert.That(ex.Message, Is.EqualTo("The 'analysisStatus' attribute is invalid - The value 'invalid' is invalid according to its datatype 'analysisStatusTypes' - The Enumeration constraint failed."));
 		}
 
@@ -444,6 +445,77 @@ namespace SIL.FieldWorks.IText
 					var imported = firstEntry.Current;
 					//The empty ugly text imported as its empty ugly self
 					Assert.AreEqual(imported.Guid.ToString(), textGuid);
+				}
+			}
+		}
+
+		[Test]
+		public void EmptyTxtItemUnderWordShouldNotCrash()
+		{
+			// an interlinear text example xml string
+			const string xml =
+"<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+"<document version=\"2\">" +
+"<interlinear-text guid=\"6a424526-aa64-4912-b8c7-9e5ae0ab4aae\">" +
+"<item type=\"title\" lang=\"en\">Test</item>" +
+"<paragraphs>" +
+"<paragraph guid=\"ccd62b33-c9f6-4e52-917f-00c67c3638c8\">" +
+"<phrases>" +
+"<phrase begin-time-offset=\"0\" end-time-offset=\"3750\" guid=\"b57a2665-402a-4ab1-af16-655c70df062f\">" +
+"<item lang=\"fr\" type=\"txt\">testing paragraph without words</item>" +
+"<words>" +
+"<word guid=\"093fe3c6-d467-4c28-a03e-d511b94185da\">" +
+"<item lang=\"fr\" type=\"txt\"/>" + // empty txt item
+"</word>" +
+"</words>" +
+"<item lang=\"en\" type=\"gls\">In the country of a Mongol king lived three sisters.</item>" +
+"</phrase>" +
+"<phrase guid=\"441c1171-78a1-481b-9732-b9c558948ce5\">" +
+"<item type=\"txt\" lang=\"fr\">This is a test.</item>" +
+"<item type=\"segnum\" lang=\"en\">1</item>" +
+"<words>" +
+"<word guid=\"d161bf25-b6df-418d-b9c1-a396ff3ec5b1\">" +
+"<item type=\"txt\" lang=\"fr\">This</item>" +
+"</word>" +
+"<word guid=\"ab9e81c7-3157-4011-a8a1-68eb1afc0be1\">" +
+"<item type=\"txt\" lang=\"fr\">is</item>" +
+"</word>" +
+"<word guid=\"0ef6172b-07c3-4c91-b0b2-afbebca5fca0\">" +
+"<item type=\"txt\" lang=\"fr\">a</item>" +
+"</word>" +
+"<word guid=\"48949d94-869c-45d5-9251-b68ce7d66cee\">" +
+"<item type=\"txt\" lang=\"fr\">test</item>" +
+"</word>" +
+"<word>" +
+"<item type=\"punct\" lang=\"fr\">.</item>" +
+"</word>" +
+"</words>" +
+"<item type=\"gls\" lang=\"en\"></item>" +
+"</phrase>" +
+"</phrases>" +
+"</paragraph>" +
+"</paragraphs>" +
+"<languages>" +
+"<language lang=\"en\" font=\"Charis SIL\" />" +
+"<language lang=\"fr\" font=\"Times New Roman\" vernacular=\"true\" />" +
+"</languages>" +
+"</interlinear-text>" +
+"</document>";
+
+			var li = new LinguaLinksImport(Cache, null, null);
+			LCModel.IText text = null;
+			using(var stream = new MemoryStream(Encoding.ASCII.GetBytes(xml.ToCharArray())))
+			{
+				// SUT - Verify that no crash occurs importing this data: see LT-22008
+				Assert.DoesNotThrow(()=> li.ImportInterlinear(new DummyProgressDlg(), stream, 0, ref text));
+				using(var firstEntry = Cache.LanguageProject.Texts.GetEnumerator())
+				{
+					firstEntry.MoveNext();
+					var imported = firstEntry.Current;
+					Assert.That(imported.ContentsOA.ParagraphsOS.Count, Is.EqualTo(1));
+					Assert.That(((IStTxtPara)imported.ContentsOA.ParagraphsOS[0]).SegmentsOS.Count, Is.EqualTo(2));
+					// Verify that the words with non-empty txt were imported
+					Assert.That(((IStTxtPara)imported.ContentsOA.ParagraphsOS[0]).SegmentsOS[1].AnalysesRS.Count, Is.EqualTo(5));
 				}
 			}
 		}

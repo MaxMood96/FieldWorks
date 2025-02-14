@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project InitialTargets="Setup" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="15.0">
-	<UsingTask TaskName="Substitute" AssemblyFile="FwBuildTasks.dll"/>
-	<UsingTask TaskName="GetSpecialFolderPath" AssemblyFile="FwBuildTasks.dll"/>
+<Project InitialTargets="Setup" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="Current">
 
 	<PropertyGroup>
-		<IcuVersion>54</IcuVersion>
+		<IcuVersion>70</IcuVersion>
+
+		<fwrt>$([System.IO.Directory]::GetParent($(MSBuildProjectDirectory)))</fwrt>
+		<fwrt Condition="'$(fwrt)' == ''">$(MSBuildThisFileDirectory)..</fwrt>
 	</PropertyGroup>
 
 	<!-- config is generally either Debug or Release, but might be Bounds or Profile. -->
@@ -75,22 +76,14 @@
 		</Otherwise>
 	</Choose>
 
-  <Target Name="Setup"><!-- cannot depend on GenerateVersionFiles, because that creates a file in Output/Common which CleanAll deletes -->
 
-	<!-- set fwrt to the proper value before we do anything else. -->
-	<ParentDirectory CurrentDirectory="$(MSBuildProjectDirectory)">
-	  <Output TaskParameter="Value" PropertyName="fwrt"/>
-	</ParentDirectory>
-
+  <Target Name="Setup" Condition="Exists('FwBuildTasks.dll')"><!-- cannot depend on GenerateVersionFiles, because that creates a file in Output/Common which CleanAll deletes -->
 	<!-- This is less pretty then I would like since xbuild doesn't support relational operators in conditions -->
 	<PropertyGroup Condition="'$(OS)'!='Windows_NT'">
 		<ToolsVersion>14.0</ToolsVersion>
 	</PropertyGroup>
-	<PropertyGroup Condition="'$(VSVersion)'=='2019'">
+	<PropertyGroup Condition="'$(OS)'=='Windows_NT'">
 		<ToolsVersion>Current</ToolsVersion>
-	</PropertyGroup>
-	<PropertyGroup Condition="'$(OS)'=='Windows_NT' AND '$(VSVersion)'!='2019'">
-		<ToolsVersion>15.0</ToolsVersion>
 	</PropertyGroup>
 
 	<!-- refresh the FieldWorks.targets file that gets loaded -->
@@ -305,8 +298,6 @@
 	  <BldIncOutput Include="../Output/Common/bldinc.h"/>
 	  <GlobalIncludeTemplate Include="GlobalInclude.properties.template"/>
 	  <GlobalIncludeOutput Include="GlobalInclude.properties"/>
-	  <EthnologueTemplate Include="../Lib/src/Ethnologue/Ethnologue.template.cs"/>
-	  <EthnologueOutput Include="../Lib/src/Ethnologue/GeneratedEthnologue.cs"/>
 	  <FwParatextLexiconPluginTemplate Include="../Src/FwParatextLexiconPlugin/ParatextLexiconPluginRegistryHelper.template.cs"/>
 	  <FwParatextLexiconPluginOutput Include="../Src/FwParatextLexiconPlugin/GeneratedParatextLexiconPluginRegistryHelper.cs"/>
 	  <FwUtilsTemplate Include="../Src/Common/FwUtils/FwUtils.template.cs"/>
@@ -321,7 +312,6 @@
 	  <Substitute Template="@(VersionTemplate)" Symbols="@(VersionSymbols)" Output="@(VersionOutput)" Condition="'$(action)'!='clean'"/>
 	  <Substitute Template="@(BldIncTemplate)" Symbols="@(VersionSymbols)" Output="@(BldIncOutput)" Condition="'$(action)'!='clean' And Exists('../Output/Common')"/>
 	  <Substitute Template="@(GlobalIncludeTemplate)" Symbols="@(VersionSymbols)" Output="@(GlobalIncludeOutput)" Condition="'$(action)'!='clean'"/>
-	  <Substitute Template="@(EthnologueTemplate)" Symbols="@(VersionSymbols)" Output="@(EthnologueOutput)" Condition="'$(action)'!='clean'"/>
 	  <Substitute Template="@(FwParatextLexiconPluginTemplate)" Symbols="@(VersionSymbols)" Output="@(FwParatextLexiconPluginOutput)" Condition="'$(action)'!='clean'"/>
 	  <Substitute Template="@(FwUtilsTemplate)" Symbols="@(VersionSymbols)" Output="@(FwUtilsOutput)" Condition="'$(action)'!='clean'"/>
 
@@ -336,7 +326,7 @@
   </Target>
 
   <PropertyGroup>
-	<fwrt>$(MSBuildProjectDirectory)/..</fwrt>
+	<fwrt>$([System.IO.Path]::GetFullPath(&quot;$(MSBuildProjectDirectory)/..&quot;))</fwrt>
 	<BUILD_LEVEL Condition="'$(BUILD_LEVEL)'==''">9</BUILD_LEVEL>
 	<!-- action is one of the following: build test clean register unregister -->
 	<action Condition="'$(action)'==''">build</action>

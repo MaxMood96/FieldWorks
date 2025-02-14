@@ -11,7 +11,7 @@ using System.Linq;
 using System.Windows.Forms;
 using System.Xml;
 using Microsoft.Win32;
-using SIL.Collections;
+using SIL.Code;
 using SIL.LCModel.Core.Text;
 using SIL.LCModel.Core.WritingSystems;
 using SIL.FieldWorks.Common.Controls;
@@ -450,7 +450,7 @@ namespace SIL.FieldWorks.LexText.Controls
 				}
 			}
 
-			m_helpProvider = new HelpProvider();
+			m_helpProvider = new FlexHelpProvider();
 			m_helpProvider.SetHelpNavigator(this, HelpNavigator.Topic);
 
 			m_updateTextMonitor = new SimpleMonitor();
@@ -1570,14 +1570,7 @@ namespace SIL.FieldWorks.LexText.Controls
 				case MoMorphTypeTags.kMorphDiscontiguousPhrase:
 				case MoMorphTypeTags.kMorphPhrase:
 					m_cbComplexFormType.Enabled = true;
-					// default to "Unspecified Complex Form" if found, else set to "0" for "phrase"
-					if (m_cbComplexFormType.SelectedIndex == m_idxNotComplex)
-					{
-						int unSpecCompFormIndex = m_cbComplexFormType.FindStringExact(UnSpecifiedComplex);
-						m_cbComplexFormType.SelectedIndex = unSpecCompFormIndex != -1
-							? unSpecCompFormIndex
-							: 0;
-					}
+					// Do not attempt to change index. Should default to "Not Applicable" - At request of LT-21666
 					break;
 				default:
 					m_cbComplexFormType.SelectedIndex = 0;

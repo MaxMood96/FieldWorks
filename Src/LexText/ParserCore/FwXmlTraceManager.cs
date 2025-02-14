@@ -6,10 +6,13 @@ using System.Diagnostics;
 using System.Linq;
 using System.Xml.Linq;
 using SIL.LCModel;
-using SIL.HermitCrab;
-using SIL.HermitCrab.MorphologicalRules;
-using SIL.HermitCrab.PhonologicalRules;
+using SIL.Machine.Morphology.HermitCrab;
+using SIL.Machine.Morphology.HermitCrab.MorphologicalRules;
+using SIL.Machine.Morphology.HermitCrab.PhonologicalRules;
 using SIL.Machine.FeatureModel;
+using SIL.Machine.Annotations;
+using System.Collections.Generic;
+using System.Text;
 
 namespace SIL.FieldWorks.WordWorks.Parser
 {
@@ -23,6 +26,11 @@ namespace SIL.FieldWorks.WordWorks.Parser
 		}
 
 		public bool IsTracing { get; set; }
+
+		public object GenerateWords(Language lang)
+		{
+			throw new System.NotImplementedException();
+		}
 
 		public void AnalyzeWord(Language lang, Word input)
 		{
@@ -124,16 +132,18 @@ namespace SIL.FieldWorks.WordWorks.Parser
 		{
 			((XElement) output.CurrentTrace).Add(new XElement("PhonologicalRuleSynthesisTrace",
 				CreateHCRuleElement("PhonologicalRule", rule),
-				CreateWordElement("Input", input, false),
-				CreateWordElement("Output", output, false)));
+				// Show bracketed to make debugging phonological rules easier (fixes LT-18682).
+				CreateWordElement("Input", input, false, true),
+				CreateWordElement("Output", output, false, true)));
 		}
 
 		public void PhonologicalRuleNotApplied(IPhonologicalRule rule, int subruleIndex, Word input, FailureReason reason, object failureObj)
 		{
 			var pruleTrace = new XElement("PhonologicalRuleSynthesisTrace",
 				CreateHCRuleElement("PhonologicalRule", rule),
-				CreateWordElement("Input", input, false),
-				CreateWordElement("Output", input, false));
+				// Show bracketed to make debugging phonological rules easier (fixes LT-18682).
+				CreateWordElement("Input", input, false, true),
+				CreateWordElement("Output", input, false, true));
 
 			var rewriteRule = rule as RewriteRule;
 			if (rewriteRule != null)
@@ -281,17 +291,17 @@ namespace SIL.FieldWorks.WordWorks.Parser
 			((XElement) input.CurrentTrace).Add(trace);
 		}
 
-		public void ParseBlocked(IHCRule rule, Word output)
+		public void Blocked(IHCRule rule, Word output)
 		{
 		}
 
-		public void ParseSuccessful(Language lang, Word output)
+		public void Successful(Language lang, Word word)
 		{
-			((XElement) output.CurrentTrace).Add(new XElement("ParseCompleteTrace", new XAttribute("success", true),
-				CreateWordElement("Result", output, false)));
+			((XElement)word.CurrentTrace).Add(new XElement("ParseCompleteTrace", new XAttribute("success", true),
+				CreateWordElement("Result", word, false)));
 		}
 
-		public void ParseFailed(Language lang, Word word, FailureReason reason, Allomorph allomorph, object failureObj)
+		public void Failed(Language lang, Word word, FailureReason reason, Allomorph allomorph, object failureObj)
 		{
 			XElement trace;
 			switch (reason)
@@ -356,7 +366,7 @@ namespace SIL.FieldWorks.WordWorks.Parser
 				case FailureReason.DisjunctiveAllomorph:
 					trace = CreateParseCompleteElement(word,
 						new XElement("FailureReason", new XAttribute("type", "disjunctiveAllomorph"),
-							CreateWordElement("Word", (Word) failureObj, false)));
+							CreateAllomorphElement((Allomorph) failureObj)));
 					break;
 
 				case FailureReason.PartialParse:
@@ -381,14 +391,34 @@ namespace SIL.FieldWorks.WordWorks.Parser
 			return new XElement(name, fs.Head().ToString().Replace(",", ""));
 		}
 
-		private static XElement CreateWordElement(string name, Word word, bool analysis)
+		private static XElement CreateWordElement(string name, Word word, bool analysis, bool bracketed = false)
 		{
 			string wordStr;
 			if (word == null)
 				wordStr = "*None*";
 			else
-				wordStr = analysis ? word.Shape.ToRegexString(word.Stratum.CharacterDefinitionTable, true) : word.Shape.ToString(word.Stratum.CharacterDefinitionTable, true);
+				wordStr = analysis
+					? word.Shape.ToRegexString(word.Stratum.CharacterDefinitionTable, true)
+					: bracketed ? ToBracketedString(word.Shape, word.Stratum.CharacterDefinitionTable)
+					: word.Shape.ToString(word.Stratum.CharacterDefinitionTable, true);
 			return new XElement(name, wordStr);
+		}
+
+		private static string ToBracketedString(IEnumerable<ShapeNode> nodes, CharacterDefinitionTable table)
+		{
+			StringBuilder stringBuilder = new StringBuilder();
+			foreach (ShapeNode node in nodes)
+			{
+				string text = table.GetMatchingStrReps(node).FirstOrDefault();
+				if (text != null)
+				{
+					if (text.Length > 1)
+						text = "(" + text + ")";
+					stringBuilder.Append(text);
+				}
+			}
+
+			return stringBuilder.ToString();
 		}
 
 		private XElement CreateMorphemeElement(Morpheme morpheme)
@@ -465,7 +495,8 @@ namespace SIL.FieldWorks.WordWorks.Parser
 			if (inflTypeID != 0 && !m_cache.ServiceLocator.GetInstance<ILexEntryInflTypeRepository>().TryGetObject(inflTypeID, out inflType))
 				return null;
 
-			return HCParser.CreateAllomorphElement("Allomorph", form, msa, inflType, formID2 != 0);
+			string guessedString = allomorph.Guessed ? allomorph.Morpheme.Gloss : null;
+			return HCParser.CreateAllomorphElement("Allomorph", form, msa, inflType, formID2 != 0, guessedString);
 		}
 	}
 }

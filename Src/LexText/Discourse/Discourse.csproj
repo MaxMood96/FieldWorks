@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="15.0">
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="Current">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -13,7 +13,7 @@
     <FileUpgradeFlags>
     </FileUpgradeFlags>
     <OldToolsVersion>3.5</OldToolsVersion>
-    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
     <UpgradeBackupLocation>
     </UpgradeBackupLocation>
     <PublishUrl>publish\</PublishUrl>
@@ -90,7 +90,8 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\Output\Debug\FwCoreDlgControls.dll</HintPath>
     </Reference>
-    <Reference Include="SIL.Windows.Forms, Version=4.2.0.0, Culture=neutral, processorArchitecture=x86">      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="SIL.Windows.Forms, Version=4.2.0.0, Culture=neutral, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\Output\Debug\SIL.Windows.Forms.dll</HintPath>
     </Reference>
     <Reference Include="icu.net, Version=2.5.0.0, Culture=neutral, PublicKeyToken=416fdd914afa6b66, processorArchitecture=MSIL">
@@ -141,9 +142,10 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\Output\Debug\ITextDll.dll</HintPath>
     </Reference>
-    <Reference Include="Microsoft.Practices.ServiceLocation, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="CommonServiceLocator, Version=1.4.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
     </Reference>
+    <Reference Include="netstandard" />
     <Reference Include="RootSite, Version=5.1.0.19970, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\Output\Debug\RootSite.dll</HintPath>
@@ -193,6 +195,7 @@
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="ConstChartRowDecorator.cs" />
+    <Compile Include="ConstChartVc.cs" />
     <Compile Include="ConstituentChart.cs">
       <SubType>UserControl</SubType>
     </Compile>
@@ -208,7 +211,9 @@
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="InterlinRibbonDecorator.cs" />
+    <Compile Include="MakeCellsMethod.cs" />
     <Compile Include="MaxStringWidthForChartColumn.cs" />
+    <Compile Include="MultilevelHeaderModel.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="DiscourseStrings.Designer.cs">
       <DependentUpon>DiscourseStrings.resx</DependentUpon>

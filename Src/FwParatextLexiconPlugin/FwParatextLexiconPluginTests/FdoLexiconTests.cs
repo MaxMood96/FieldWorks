@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using NUnit.Framework;
 using Paratext.LexicalContracts;
@@ -112,8 +113,8 @@ namespace SIL.FieldWorks.ParatextLexiconPlugin
 		[Test]
 		public void AddingSenseAddsLexeme()
 		{
-			Lexeme lex = m_lexicon.CreateLexeme(LexemeType.Word, "a");
-			LexiconSense sense = lex.AddSense();
+			Lexeme lex = m_lexicon.CreateLexeme(LexemeType.Word, "a"); // Creates lexeme, but does not add it (verified in another test)
+			LexiconSense sense = lex.AddSense(); // SUT: Lexeme is added by adding the Sense
 			sense.AddGloss("en", "test");
 
 			Assert.AreEqual(1, m_lexicon.Lexemes.Count());
@@ -127,6 +128,30 @@ namespace SIL.FieldWorks.ParatextLexiconPlugin
 		}
 
 		/// <summary>
+		/// Test that adding a Lexeme results in ImportResidue for the LexEntry that is created.
+		/// </summary>
+		[Test]
+		public void AddingLexemeOrSenseSetsImportResidue()
+		{
+			var lex = m_lexicon.CreateLexeme(LexemeType.Stem, "a"); // Creates lexeme, but does not add it (verified in another test)
+			lex.AddSense();
+
+			var lexEntryRepo = m_cache.ServiceLocator.GetInstance<ILexEntryRepository>().AllInstances();
+			var lexEntry = lexEntryRepo.FirstOrDefault(entry =>
+				entry.LexemeFormOA.Form.VernacularDefaultWritingSystem.Text == "a");
+			var sense = lex.AddSense(); // SUT: Lexeme is added by adding the Sense
+			sense.AddGloss("en", "test");
+
+			Assert.AreEqual(1, m_lexicon.Lexemes.Count());
+
+			lex = m_lexicon[lex.Id]; // Make sure we're using the one stored in the lexicon
+			Assert.AreEqual("a", lex.LexicalForm, "Failure in test setup");
+			Assert.AreEqual(1, lex.Senses.Count(), "Failure in test setup");
+			Assert.That(lexEntry.ImportResidue.Text, Is.EqualTo(FdoLexicon.AddedByParatext));
+			Assert.That(lexEntry.SensesOS[0].ImportResidue.Text, Is.EqualTo(FdoLexicon.AddedByParatext));
+		}
+
+		/// <summary>
 		/// Test that homograph increments
 		/// </summary>
 		[Test]
@@ -136,12 +161,16 @@ namespace SIL.FieldWorks.ParatextLexiconPlugin
 			Lexeme lex2 = m_lexicon.CreateLexeme(LexemeType.Stem, "a");
 
 			m_lexicon.AddLexeme(lex);
-
+			// lex2 should be identical to lex since there aren't any in the cache yet
 			Assert.AreEqual(lex.Id, lex2.Id);
 
+			// This lexeme should have a new homograph number since lex has been added to the cache
 			Lexeme lex3 = m_lexicon.CreateLexeme(LexemeType.Stem, "a");
-			Assert.AreNotEqual(lex.Id, lex3.Id);
-			Assert.AreNotEqual(lex2.Id, lex3.Id);
+			Assert.That(lex.Id, Is.Not.EqualTo(lex3.Id));
+			Assert.That(lex2.Id, Is.Not.EqualTo(lex3.Id));
+			Assert.That(lex.HomographNumber, Is.EqualTo(1));
+			Assert.That(lex2.HomographNumber, Is.EqualTo(1));
+			Assert.That(lex3.HomographNumber, Is.EqualTo(2));
 		}
 
 		/// <summary>
@@ -199,12 +228,12 @@ namespace SIL.FieldWorks.ParatextLexiconPlugin
 			m_lexicon.AddLexeme(lex);
 
 			lex = m_lexicon[lex.Id];
-			Assert.IsNotNull(lex);
+			Assert.That(lex, Is.Not.Null);
 			Assert.AreEqual(LexemeType.Stem, lex.Type);
 			Assert.AreEqual("a", lex.LexicalForm);
 
 			Lexeme lex2 = m_lexicon.CreateLexeme(LexemeType.Suffix, "monkey");
-			Assert.IsNull(m_lexicon[lex2.Id]);
+			Assert.That(m_lexicon[lex2.Id], Is.Null);
 		}
 
 		/// <summary>
@@ -389,12 +418,12 @@ namespace SIL.FieldWorks.ParatextLexiconPlugin
 			m_lexicon.AddLexeme(lex);
 
 			lex = m_lexicon[new LexemeKey(LexemeType.Stem, "Vacaci\u00f3n").Id];
-			Assert.IsNotNull(lex);
+			Assert.That(lex, Is.Not.Null);
 			Assert.AreEqual(LexemeType.Stem, lex.Type);
 			Assert.AreEqual("Vacaci\u00f3n", lex.LexicalForm);
 
 			LexiconSense sense = lex.AddSense();
-			Assert.IsNotNull(sense);
+			Assert.That(sense, Is.Not.Null);
 
 			LanguageText gloss = sense.AddGloss("en", "D\u00f3nde");
 
@@ -518,7 +547,7 @@ namespace SIL.FieldWorks.ParatextLexiconPlugin
 		{
 			// Nothing found
 			Lexeme matchingLexeme = m_lexicon.FindClosestMatchingLexeme("a");
-			Assert.IsNull(matchingLexeme);
+			Assert.That(matchingLexeme, Is.Null);
 
 			// Found by simple lexicon lookup
 			Lexeme lexeme = m_lexicon.CreateLexeme(LexemeType.Stem, "a");
@@ -694,6 +723,58 @@ namespace SIL.FieldWorks.ParatextLexiconPlugin
 			}
 		}
 
-		#endregion
-	}
+		/// <summary/>
+		[Test]
+		public void FindAllHomographs_ReturnsAll()
+		{
+			NonUndoableUnitOfWorkHelper.Do(m_cache.ActionHandlerAccessor, () =>
+			{
+				ILexEntry entry1 = m_cache.ServiceLocator.GetInstance<ILexEntryFactory>().Create(
+					m_cache.ServiceLocator.GetInstance<IMoMorphTypeRepository>()
+						.GetObject(MoMorphTypeTags.kguidMorphStem),
+					TsStringUtils.MakeString("form1", m_cache.DefaultVernWs), "gloss1",
+					new SandboxGenericMSA());
+				ILexEntry entry2 = m_cache.ServiceLocator.GetInstance<ILexEntryFactory>().Create(
+					m_cache.ServiceLocator.GetInstance<IMoMorphTypeRepository>()
+						.GetObject(MoMorphTypeTags.kguidMorphStem),
+					TsStringUtils.MakeString("form1", m_cache.DefaultVernWs), "gloss2",
+					new SandboxGenericMSA());
+			});
+			var entries = m_lexicon.FindAllHomographs(LexemeType.Stem, "form1");
+			Assert.That(entries.Count(), Is.EqualTo(2));
+		}
+
+		/// <summary/>
+		[Test]
+		public void WordAnalysesV2_WordAnalyses_ReturnsWithGlosses()
+		{
+			Lexeme lexemeA = m_lexicon.CreateLexeme(LexemeType.Stem, "a");
+			m_lexicon.AddLexeme(lexemeA);
+			Lexeme lexemePre = m_lexicon.CreateLexeme(LexemeType.Prefix, "pre");
+			m_lexicon.AddLexeme(lexemePre);
+			Lexeme lexemeSuf = m_lexicon.CreateLexeme(LexemeType.Suffix, "suf");
+			m_lexicon.AddLexeme(lexemeSuf);
+			var wordAnalysis = m_lexicon.CreateWordAnalysis("preasuf", new[] { lexemePre, lexemeA, lexemeSuf });
+			m_lexicon.AddWordAnalysis(wordAnalysis);
+			var otherAnalysis = m_lexicon.CreateWordAnalysis("preasuf", new Lexeme[] { lexemeA });
+			m_lexicon.AddWordAnalysis(otherAnalysis);
+			var analyses = m_lexicon.GetWordAnalyses("preasuf").ToArray();
+			Assert.That(analyses.Count, Is.EqualTo(2));
+			NonUndoableUnitOfWorkHelper.Do(m_cache.ActionHandlerAccessor, () =>
+			{
+				var analysis = m_cache.ServiceLocator.GetInstance<IWfiAnalysisRepository>().AllInstances().First();
+				var gloss = m_cache.ServiceLocator.GetInstance<IWfiGlossFactory>().Create();
+				analysis.MeaningsOC.Add(gloss);
+				gloss.Form.SetAnalysisDefaultWritingSystem("how glossy");
+			});
+
+			var lexiconAnalyses = ((WordAnalysesV2)m_lexicon).WordAnalyses;
+			Assert.That(lexiconAnalyses.Count(), Is.EqualTo(2));
+			Assert.DoesNotThrow(()=>lexiconAnalyses.First().GetEnumerator());
+			Assert.That(lexiconAnalyses.First().Glosses.Count(), Is.EqualTo(1));
+			Assert.That(lexiconAnalyses.First().Glosses.First().Text, Is.EqualTo("how glossy"));
+	  }
+
+	  #endregion
+   }
 }

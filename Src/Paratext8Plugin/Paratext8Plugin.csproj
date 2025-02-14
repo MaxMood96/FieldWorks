@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="Current" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -9,7 +9,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Paratext8Plugin</RootNamespace>
     <AssemblyName>Paratext8Plugin</AssemblyName>
-    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
   </PropertyGroup>
@@ -60,6 +60,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="netstandard" />
     <Reference Include="Paratext.LexicalContracts, Version=1.0.0.0, Culture=neutral, PublicKeyToken=9a5af29a0e638a7b, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\Output\Debug\Paratext.LexicalContracts.dll</HintPath>
@@ -70,10 +71,11 @@
     <Reference Include="PtxUtils">
       <HintPath>..\..\Output\Debug\PtxUtils.dll</HintPath>
     </Reference>
-    <Reference Include="ScriptureUtils">
+    <Reference Include="ScriptureUtils" version="9.0.0">
       <HintPath>..\..\Output\Debug\ScriptureUtils.dll</HintPath>
     </Reference>
     <Reference Include="SIL.Scripture">
+      <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\Output\Debug\SIL.Scripture.dll</HintPath>
     </Reference>
     <Reference Include="System" />

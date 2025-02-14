@@ -1,10 +1,12 @@
-// Copyright (c) 2010-2021 SIL International
+// Copyright (c) 2010-2022 SIL International
 // This software is licensed under the LGPL, version 2.1 or later
 // (http://www.gnu.org/licenses/lgpl-2.1.html)
 
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
+using SIL.Extensions;
 
 namespace SIL.FieldWorks.Common.FwUtils
 {
@@ -15,6 +17,8 @@ namespace SIL.FieldWorks.Common.FwUtils
 	/// ----------------------------------------------------------------------------------------
 	public class VersionInfoProvider
 	{
+
+		internal static DateTime DefaultBuildDate = new DateTime(2001, 06, 23);
 		/// <summary>Default copyright string if no assembly could be found</summary>
 		public const string kDefaultCopyrightString = "Copyright (c) 2002-2021 SIL International";
 		/// <summary>Copyright string to use in sensitive areas (i.e. when m_fShowSILInfo is true)</summary>
@@ -79,8 +83,7 @@ namespace SIL.FieldWorks.Common.FwUtils
 			get
 			{
 				var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetCallingAssembly();
-				string productVersion, productDate;
-				ParseInformationalVersion(assembly, out productVersion, out productDate);
+				ParseInformationalVersion(assembly, out var productVersion, out _);
 				if (string.IsNullOrEmpty(productVersion))
 				{
 					var fileVersion = Attribute.GetCustomAttribute(assembly, typeof(AssemblyFileVersionAttribute))
@@ -225,7 +228,7 @@ namespace SIL.FieldWorks.Common.FwUtils
 					if (date > 0)
 					{
 						DateTime dt = DateTime.FromOADate(date);
-						productDate = dt.ToString("yyyy/MM/dd");
+						productDate = dt.ToISO8601TimeFormatDateOnlyString();
 					}
 
 					goto case 1;
@@ -255,6 +258,21 @@ namespace SIL.FieldWorks.Common.FwUtils
 				Array.Copy(realParts, versionParts, Math.Min(realParts.Length, versionParts.Length));
 
 				return string.Format(FwUtilsStrings.kstidMajorVersionFmt, $"{versionParts[0]}.{versionParts[1]} {versionParts[4]}");
+			}
+		}
+
+		/// <summary>The date this version of FieldWorks was built, or the date of the first FieldWorks checkin</summary>
+		internal DateTime ApparentBuildDate
+		{
+			get
+			{
+				ParseInformationalVersion(m_assembly, out _, out var date);
+				if (DateTime.TryParse(date, CultureInfo.InvariantCulture, DateTimeStyles.None,
+						out var buildDate))
+				{
+					return buildDate;
+				}
+				return DefaultBuildDate;
 			}
 		}
 
